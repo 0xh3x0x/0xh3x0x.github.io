@@ -28,7 +28,6 @@ import rehypePixelated from './src/plugins/rehype-pixelated' /* Custom plugin to
 export default defineConfig({
   site: siteConfig.site,
   //site: 'https://0xh3x.github.io',
-  base: '/0xh3x.github.io',
   trailingSlash: siteConfig.trailingSlashes ? 'always' : 'never',
   prefetch: true,
   markdown: {
