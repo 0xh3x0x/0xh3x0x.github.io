@@ -1,0 +1,137 @@
+---
+// Custom cursor: a small dot that snaps to the pointer + a trailing ring that
+// eases toward it smoothly. Desktop pointer devices only — falls back to the
+// native cursor on touch devices and when reduced motion is requested.
+---
+<div id="cursor-dot" aria-hidden="true"></div>
+<div id="cursor-ring" aria-hidden="true"></div>
+
+<style>
+  #cursor-dot,
+  #cursor-ring {
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 9998;
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  #cursor-dot {
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
+    background: var(--theme-accent);
+    box-shadow: 0 0 10px var(--theme-accent), 0 0 2px var(--theme-accent);
+    transition: opacity 0.2s ease;
+  }
+
+  #cursor-ring {
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    border: 2px solid var(--theme-accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--theme-accent), 35%, transparent);
+    transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, margin 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  #cursor-ring.cursor-hover {
+    width: 56px;
+    height: 56px;
+    margin: -28px 0 0 -28px;
+    background: color-mix(in srgb, var(--theme-accent), 12%, transparent);
+  }
+
+  #cursor-ring.cursor-active {
+    width: 26px;
+    height: 26px;
+    margin: -13px 0 0 -13px;
+  }
+
+  html.has-custom-cursor #cursor-dot,
+  html.has-custom-cursor #cursor-ring {
+    opacity: 1;
+  }
+  html.has-custom-cursor,
+  html.has-custom-cursor a,
+  html.has-custom-cursor button,
+  html.has-custom-cursor input,
+  html.has-custom-cursor textarea,
+  html.has-custom-cursor * {
+    cursor: none !important;
+  }
+</style>
+
+<script>
+  function initCursor() {
+    const dot = document.getElementById('cursor-dot')
+    const ring = document.getElementById('cursor-ring')
+    if (!dot || !ring) return
+
+    const supportsFinePointer = window.matchMedia('(pointer: fine)').matches
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!supportsFinePointer || reducedMotion) {
+      document.documentElement.classList.remove('has-custom-cursor')
+      dot.style.display = 'none'
+      ring.style.display = 'none'
+      return
+    }
+    document.documentElement.classList.add('has-custom-cursor')
+
+    let mouseX = window.innerWidth / 2
+    let mouseY = window.innerHeight / 2
+    let ringX = mouseX
+    let ringY = mouseY
+    let rafId: number
+
+    function onMove(e: MouseEvent) {
+      mouseX = e.clientX
+      mouseY = e.clientY
+      // dot snaps instantly — use left/top, not transform, so the CSS
+      // transition list (which targets width/height/margin) never fights it
+      dot!.style.left = mouseX + 'px'
+      dot!.style.top = mouseY + 'px'
+    }
+    window.addEventListener('mousemove', onMove, { passive: true })
+
+    // smooth trailing animation for the ring — eased toward the live mouse position
+    function tick() {
+      ringX += (mouseX - ringX) * 0.15
+      ringY += (mouseY - ringY) * 0.15
+      ring!.style.left = ringX + 'px'
+      ring!.style.top = ringY + 'px'
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+
+    // grow the ring on interactive elements
+    const interactiveSelector = 'a, button, input, textarea, select, [role="button"], .tab-btn, .diff-btn, .os-btn, .stat-tab-btn'
+    document.addEventListener('mouseover', (e) => {
+      const target = (e.target as HTMLElement)?.closest(interactiveSelector)
+      if (target) ring!.classList.add('cursor-hover')
+    })
+    document.addEventListener('mouseout', (e) => {
+      const target = (e.target as HTMLElement)?.closest(interactiveSelector)
+      if (target) ring!.classList.remove('cursor-hover')
+    })
+
+    document.addEventListener('mousedown', () => ring!.classList.add('cursor-active'))
+    document.addEventListener('mouseup', () => ring!.classList.remove('cursor-active'))
+
+    document.addEventListener('mouseleave', () => {
+      dot!.style.opacity = '0'
+      ring!.style.opacity = '0'
+    })
+    document.addEventListener('mouseenter', () => {
+      dot!.style.opacity = ''
+      ring!.style.opacity = ''
+    })
+
+    // clean up on view-transition swaps so we don't stack multiple rAF loops
+    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(rafId), { once: true })
+  }
+
+  initCursor()
+  document.addEventListener('astro:after-swap', initCursor)
+</script>

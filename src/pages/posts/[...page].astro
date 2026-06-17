@@ -1,0 +1,239 @@
+---
+import type { GetStaticPaths } from 'astro'
+import Layout from '~/layouts/Layout.astro'
+import { getSortedPosts } from '~/utils'
+import PageHeader from '~/components/PageHeader.astro'
+import ArchiveCard from '~/components/ArchiveCard.astro'
+import PostPreview from '~/components/PostPreview.astro'
+import Pagination from '~/components/Pagination.astro'
+import siteConfig from '~/site.config'
+
+// We use a broad catch-all route but handle category filtering in the page logic.
+// For simplicity with static generation, we render all posts and use client-side tabs.
+export const getStaticPaths = (async ({ paginate }) => {
+  const sortedPosts = await getSortedPosts()
+  return paginate(sortedPosts.reverse(), { pageSize: 9999 }) // all posts, tabs done client-side
+}) satisfies GetStaticPaths
+
+const { page } = Astro.props
+const allPosts = page.data
+
+// Categorise
+const htbPosts = allPosts.filter(p => (p.data.series || '').toLowerCase().includes('Hack-The-Box') || (p.data.tags || []).includes('HTB'))
+const portswiggerPosts = allPosts.filter(p => (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger'))
+const blogPosts = allPosts.filter(p => {
+  const isHTB = (p.data.series || '').toLowerCase().includes('hack') || (p.data.tags || []).includes('HTB')
+  const isPS = (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger')
+  return !isHTB && !isPS
+})
+
+// Stats
+const totalCount = allPosts.length
+const htbCount = htbPosts.length
+const psCount = portswiggerPosts.length
+const blogCount = blogPosts.length
+
+// Difficulty distribution for HTB
+const difficulties = ['Easy','Medium','Hard','Insane']
+const diffCounts = Object.fromEntries(difficulties.map(d => [d, htbPosts.filter(p => (p.data.tags||[]).includes(d)).length]))
+---
+
+<Layout title="Archive" description="All writeups and posts — HTB machines, PortSwigger labs, and blog articles">
+  <div class="mt-2 sm:mt-0 w-full">
+    <PageHeader title="archive" />
+
+    {/* ── Stats bar ── */}
+    <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: 'Total Posts', value: totalCount, icon: '◈' },
+        { label: 'HTB Writeups', value: htbCount, icon: '⬡' },
+        { label: 'PortSwigger', value: psCount, icon: '⬢' },
+        { label: 'Blog Posts', value: blogCount, icon: '◆' },
+      ].map(stat => (
+        <div class="flex flex-col items-center justify-center gap-1 py-4 px-3 rounded-xl border-1 border-accent/15 bg-accent/4 text-center">
+          <span class="text-accent text-xl font-mono">{stat.icon}</span>
+          <span class="text-2xl font-bold text-heading1 font-mono">{stat.value}</span>
+          <span class="text-xs text-foreground/55 uppercase tracking-widest">{stat.label}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* ── Tabs ── */}
+    <div class="mt-8" id="archive-root">
+      <div class="flex flex-wrap gap-2 mb-6 border-b-1 border-accent/15 pb-3" id="tab-bar" role="tablist">
+        {[
+          { id: 'htb', label: 'HTB', count: htbCount, icon: '⬡' },
+          { id: 'portswigger', label: 'PortSwigger', count: psCount, icon: '⬢' },
+          { id: 'blog', label: 'Blog', count: blogCount, icon: '◆' },
+          { id: 'all', label: 'All Posts', count: totalCount, icon: '◈' },
+        ].map(tab => (
+          <button
+            class="tab-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-mono font-semibold border-1 transition-all duration-200 cursor-pointer"
+            data-tab={tab.id}
+            role="tab"
+            aria-selected="false"
+            aria-controls={`panel-${tab.id}`}
+          >
+            <span class="text-accent">{tab.icon}</span>
+            {tab.label}
+            <span class="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-accent/12 text-accent/80 font-mono">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* ── HTB Panel ── */}
+      <div id="panel-htb" role="tabpanel" class="tab-panel hidden">
+        {/* Difficulty breakdown */}
+        <div class="flex flex-wrap gap-3 mb-6">
+          {[
+            { d: 'Easy', color: 'text-green-400 border-green-400/30 bg-green-400/6' },
+            { d: 'Medium', color: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/6' },
+            { d: 'Hard', color: 'text-red-400 border-red-400/30 bg-red-400/6' },
+            { d: 'Insane', color: 'text-purple-400 border-purple-400/30 bg-purple-400/6' },
+          ].map(({ d, color }) => (
+            <span class:list={['inline-flex items-center gap-1.5 text-sm font-mono px-3 py-1.5 rounded-lg border-1', color]}>
+              <span class="font-bold">{diffCounts[d]}</span>
+              <span class="opacity-70">{d}</span>
+            </span>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div class="relative mb-5">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
+          <input
+            type="text"
+            placeholder="grep machine..."
+            class="htb-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 htb-grid">
+          {htbPosts.map(post => <ArchiveCard post={post} />)}
+        </div>
+        {htbPosts.length === 0 && (
+          <p class="text-foreground/40 font-mono text-center py-12">// no HTB writeups found</p>
+        )}
+      </div>
+
+      {/* ── PortSwigger Panel ── */}
+      <div id="panel-portswigger" role="tabpanel" class="tab-panel hidden">
+        <div class="relative mb-5">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
+          <input
+            type="text"
+            placeholder="grep lab..."
+            class="ps-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
+            autocomplete="off"
+          />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 ps-grid">
+          {portswiggerPosts.map(post => <ArchiveCard post={post} />)}
+        </div>
+        {portswiggerPosts.length === 0 && (
+          <p class="text-foreground/40 font-mono text-center py-12">// no PortSwigger labs yet — add <code>PortSwigger</code> tag to your posts</p>
+        )}
+      </div>
+
+      {/* ── Blog Panel ── */}
+      <div id="panel-blog" role="tabpanel" class="tab-panel hidden">
+        <div class="flex flex-col gap-4">
+          {blogPosts.map(post => <PostPreview post={post} />)}
+          {blogPosts.length === 0 && (
+            <p class="text-foreground/40 font-mono text-center py-12">// no blog posts found</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── All Panel ── */}
+      <div id="panel-all" role="tabpanel" class="tab-panel hidden">
+        <div class="relative mb-5">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
+          <input
+            type="text"
+            placeholder="grep post..."
+            class="all-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
+            autocomplete="off"
+          />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 all-grid">
+          {allPosts.map(post => <ArchiveCard post={post} />)}
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .tab-btn {
+    border-color: color-mix(in srgb, var(--theme-accent), 15%, transparent);
+    color: color-mix(in srgb, var(--theme-foreground), 60%, transparent);
+    background-color: transparent;
+  }
+  .tab-btn:hover {
+    border-color: color-mix(in srgb, var(--theme-accent), 35%, transparent);
+    color: var(--theme-foreground);
+    background-color: color-mix(in srgb, var(--theme-accent), 6%, transparent);
+  }
+  .tab-btn.active {
+    border-color: color-mix(in srgb, var(--theme-accent), 50%, transparent);
+    color: var(--theme-accent);
+    background-color: color-mix(in srgb, var(--theme-accent), 10%, transparent);
+  }
+  .tab-panel {
+    animation: fadeIn 0.18s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+
+<script>
+  function initArchive() {
+    const tabs = document.querySelectorAll<HTMLButtonElement>('.tab-btn')
+    const panels = document.querySelectorAll<HTMLElement>('.tab-panel')
+
+    function activate(id: string) {
+      tabs.forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === id)
+        t.setAttribute('aria-selected', String(t.dataset.tab === id))
+      })
+      panels.forEach(p => {
+        p.classList.toggle('hidden', p.id !== `panel-${id}`)
+      })
+      sessionStorage.setItem('archive-tab', id)
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => activate(tab.dataset.tab!))
+    })
+
+    // Restore last tab or default to htb
+    const saved = sessionStorage.getItem('archive-tab') || 'htb'
+    activate(saved)
+
+    // Live search helpers
+    function addSearch(inputSel: string, gridSel: string) {
+      const input = document.querySelector<HTMLInputElement>(inputSel)
+      const grid  = document.querySelector<HTMLElement>(gridSel)
+      if (!input || !grid) return
+      input.addEventListener('input', () => {
+        const q = input.value.toLowerCase().trim()
+        grid.querySelectorAll<HTMLAnchorElement>('a').forEach(card => {
+          const text = card.textContent?.toLowerCase() || ''
+          card.style.display = (!q || text.includes(q)) ? '' : 'none'
+        })
+      })
+    }
+
+    addSearch('.htb-search',  '.htb-grid')
+    addSearch('.ps-search',   '.ps-grid')
+    addSearch('.all-search',  '.all-grid')
+  }
+
+  // Run on first load and after view transitions
+  initArchive()
+  document.addEventListener('astro:after-swap', initArchive)
+</script>

@@ -1,0 +1,78 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import { render } from 'astro:content'
+import { dateString } from '~/utils'
+
+interface Props {
+  post: CollectionEntry<'posts'>
+}
+
+const { post } = Astro.props
+const { remarkPluginFrontmatter } = await render(post)
+const description = remarkPluginFrontmatter.description || post.data.description
+const minutesRead  = remarkPluginFrontmatter.minutesRead
+const articleLink  = `/posts/${post.id}`
+
+const tags = post.data.tags || []
+const difficulty = post.data.difficulty
+const timeToPwn = post.data.timeToPwn
+
+const difficultyColors: Record<string, string> = {
+  Easy:    'text-green-400  border-green-400/30  bg-green-400/8',
+  Medium:  'text-yellow-400 border-yellow-400/30 bg-yellow-400/8',
+  Hard:    'text-red-400    border-red-400/30    bg-red-400/8',
+  Insane:  'text-purple-400 border-purple-400/30 bg-purple-400/8',
+  Unknown: 'text-foreground/40 border-foreground/15 bg-foreground/5',
+}
+
+const osTag = post.data.osType
+const osClass = osTag === 'Windows'
+  ? 'text-blue-400 border-blue-400/30 bg-blue-400/8'
+  : osTag === 'Linux'
+    ? 'text-orange-400 border-orange-400/30 bg-orange-400/8'
+    : ''
+
+const techTags = tags.filter((t: string) => !['HTB','PortSwigger'].includes(t)).slice(0, 3)
+---
+
+<a
+  href={articleLink}
+  class="group flex flex-col gap-1.5 p-4 rounded-lg border-1 border-accent/10 bg-accent/2 hover:bg-accent/6 hover:border-accent/25 transition-all duration-200"
+>
+  <div class="flex items-start justify-between gap-2">
+    <span class="font-semibold text-heading1 text-base group-hover:text-accent transition-colors leading-snug line-clamp-2">
+      {post.data.title}
+    </span>
+    <span class="shrink-0 text-xs text-foreground/50 mt-0.5 font-mono whitespace-nowrap">
+      {dateString(post.data.published)}
+    </span>
+  </div>
+
+  {description && (
+    <p class="text-sm text-foreground/65 line-clamp-2 leading-relaxed">{description}</p>
+  )}
+
+  <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+    {difficulty && (
+      <span class:list={['text-xs font-mono px-2 py-0.5 rounded-full border-1', difficultyColors[difficulty] || 'text-foreground/50 border-foreground/15']}>
+        {difficulty}
+      </span>
+    )}
+    {osTag && (
+      <span class:list={['text-xs font-mono px-2 py-0.5 rounded-full border-1', osClass]}>
+        {osTag}
+      </span>
+    )}
+    {techTags.map((tag: string) => (
+      <span class="text-xs font-mono px-2 py-0.5 rounded-full border-1 border-accent/15 text-accent/60 bg-accent/3">
+        {tag}
+      </span>
+    ))}
+
+    {/* Time to pwn / reading time */}
+    <span class="ml-auto text-xs font-mono text-foreground/35 flex items-center gap-1 shrink-0">
+      <span class="text-accent/40">⏱</span>
+      {timeToPwn ? `~${timeToPwn}` : minutesRead || ''}
+    </span>
+  </div>
+</a>

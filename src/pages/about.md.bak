@@ -1,0 +1,215 @@
+---
+layout: '~/layouts/MarkdownLayout.astro'
+title: About Me
+---
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=15&pause=1000&color=F71111&width=435&height=25&lines=0xh3x%40kali%3A~%23+Offensive+Security+Professional;0xh3x%40kali%3A~%23+Ethical+Hacker;0xh3x%40kali%3A~%23+Active+Directory+Pentester;0xh3x%40kali%3A~%23+CTF+Player;0xh3x%40kali%3A~%23+Cyber+security+expert;0xh3x%40kali%3A~%23+Web+Application+Secuirty)](https://git.io/typing-svg)
+
+:::hacker
+"Exploit the box, learn the system, automate the hack."
+:::
+
+<code><span style="font-family: monospace; font-size: 30px; color: red;">root@kali:&#126;#</span> <span style="font-size: 30px; color: green;">Whoami</span></code>
+<br><br>
+I’m penetration tester with a strong focus on offensive security, red teaming methodologies, and real-world attack simulation. With hands-on experience across enterprise environments, I specialize in identifying, 
+exploiting, and helping remediate complex security vulnerabilities.
+Currently working in a professional security role, I bring practical exposure to both Linux and Windows environments, with a particular interest in Active Directory exploitation, privilege escalation, and post-exploitation techniques. I approach security not just as a checklist, but as an attacker—thinking in paths, chains, and impact.
+
+My work is deeply rooted in continuous learning and practical application. I actively solve labs, CTFs, and real-world scenarios to sharpen my skills and stay aligned with evolving threat landscapes. I also document my findings, techniques, and methodologies to build a structured knowledge base—both for personal mastery and to contribute back to the community.
+
+ I break into systems (legally), build labs that simulate real enterprise misconfigurations, and automate the boring parts of red teaming so I can focus on the interesting ones.
+
+<code><span style="font-family: monospace; font-size: 30px; color: red;">root@kali:&#126;#</span> <span style="font-size: 30px; color: green;">Projects</span></code>
+<br><br>
+<span style="font-size: 20px;">**MAD - MindFlayer's Active Directory**</span><br>
+
+::github{repo="0xh3x0x/MAD"}
+
+<br><br>
+<span style="font-size: 20px;">**RevShellCraft**</span><br>
+
+A reverse shell generation and management utility for penetration testers. Designed to quickly craft payloads across different protocols and target environments — because copy-pasting from cheat sheets gets old fast.
+
+::github{repo="0xh3x0x/RevShellCraft"}
+
+<br><br>
+<code><span style="font-family: monospace; font-size: 30px; color: red;">root@kali:&#126;#</span> <span style="font-size: 30px; color: green;">Certifications</span></code>
+<br><br>
+
+<!--<code>
+<span style="font-family: monospace; font-size: 30px; color: #ff4d4d;">root@kali:~#</span>
+<span style="font-size: 30px; color: #00ff41;"> Certifications</span>
+</code>
+
+<br>
+<br><br>
+<div style="font-family: monospace;">
+
+<div align="center">
+
+# 🛡️ CLASSIFIED CREDENTIAL RECORD
+
+</div>
+<p style="color:#8a8a8a;">
+Verified offensive security qualifications and practical examination achievements.
+</p>
+
+</div>
+
+<br>
+
+<div style="
+border:2px solid #00ff41;
+padding:25px;
+border-radius:10px;
+background:#050505;
+font-family:monospace;
+box-shadow:0 0 20px rgba(0,255,65,0.12);
+">
+
+<div align="center">
+
+<img src="https://www.offsec.com/_astro/OSCP-plus.BZHuApYA_2hPrli.svg" width="90"/>
+
+# OSCP
+
+### Offensive Security Certified Professional
+
+<a href="https://www.offsec.com/courses/pen-200/" target="_blank" style="
+display:inline-block;
+padding:14px 28px;
+background:#00ff41;
+color:#000;
+text-decoration:none;
+font-weight:bold;
+border-radius:8px;
+box-shadow:0 0 15px rgba(52, 134, 72, 0.4);
+transition:all .3s ease;
+" >
+⚡ ACCESS CERTIFICATION DOSSIER
+</a>
+
+</div>
+
+<hr style="border-color:#00ff41;opacity:.2;">
+
+<p align="center">
+Demonstrated real-world penetration testing expertise through
+hands-on exploitation, Active Directory attacks, privilege
+escalation, lateral movement, post-exploitation, and reporting.
+</p>
+
+</div>
+
+<br>
+
+<div style="
+border:2px solid #3aa0ff;
+padding:25px;
+border-radius:10px;
+background:#050505;
+font-family:monospace;
+box-shadow:0 0 20px rgba(58,160,255,0.12);
+">
+
+<div align="center">
+
+<img src="https://security.ine.com/wp-content/uploads/2023/07/eJPT.png" width="90"/>
+
+# eJPT
+
+### eLearnSecurity Junior Penetration Tester
+
+<a href="https://security.ine.com/certifications/ejpt-certification/" target="_blank">
+View Certification Details →
+</a>
+
+</div>
+
+<hr style="border-color:#3aa0ff;opacity:.2;">
+
+<p align="center">
+Validated foundational offensive security skills including
+reconnaissance, enumeration, exploitation, web application
+attacks, network penetration testing, and reporting.
+</p>
+
+</div>
+-->
+
+
+```bash
+root@kali:~# credentials --summary
+
+[✓] OSCP  -> Offensive Security Certified Professional
+[✓] eJPT  -> eLearnSecurity Junior Penetration Tester
+[✓] PT1  -> Junior Penetration Tester
+[✓] Google CS  -> Google CyberSecurity 
+[*] CPTS  -> Certified Penetration Testing Specialist [IN-PROGRESS]
+
+4 certifications loaded successfully.
+```
+<br>
+<code>
+<span style="font-family: monospace; font-size: 30px; color: #ff4d4d;">root@kali:~#</span>
+<span style="font-size: 30px; color: green;"> Skills</span>
+</code>
+
+```bash
+root@kali:~# capability-scan --operator 0xh3x
+
+[+] Enumerating offensive capabilities...
+[+] Loading skill matrix...
+[+] Listing skills
+
+├── Technical Domains
+│   ├── Penetration Testing
+│   ├── API Security
+│   ├── Cyber Security
+│   ├── Networking
+│   ├── Active Directory Secuiry & Penetration testing
+│   ├── Vulnerability Management
+│   ├── Network Security
+│   ├── Web Application Security
+│   ├── Android Application Penetration testing
+│   ├── Privilege Escalation
+│   ├── Post Exploitation
+│   └── Red Teaming
+│
+├── Security Tools
+│   ├── Wireshark
+│   ├── Sliver
+│   ├── nmap/zenmap
+│   ├── BurpSuite
+│   ├── OWASP ZAP/zed attack proxy
+│   ├── Nessus
+│   ├── Metasploit
+│   ├── BloodHound
+│   ├── Nikto
+│   ├── Wazuh SIEM
+│   ├── Postman
+│   ├── Acunetix
+│   ├── Powershell
+│   ├── impacket toolkit
+│   ├── netexec
+│   └── etc..
+│
+├── Cloud & Infrastructures
+│   ├── Azure Cloud Security
+│   ├── Azure IAM
+│   ├── Virtual Machines
+│   ├── Azure DevOps
+│   ├── Pipelines & repos
+│   ├── Firewalls
+│   ├── Docker
+│   ├── Kubernetes
+│   └── etc..
+│
+├── Scripting & Automation
+│   ├── AI-Model 
+│   ├── MCP
+│   ├── Python
+│   ├── Bash
+│   ├── C,C++ (Basics)
+│   └── SQL
+
+```

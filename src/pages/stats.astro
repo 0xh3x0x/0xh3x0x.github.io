@@ -1,0 +1,192 @@
+---
+import Layout from '~/layouts/Layout.astro'
+import PageHeader from '~/components/PageHeader.astro'
+import { getSortedPosts } from '~/utils'
+
+const allPosts = (await getSortedPosts()).reverse()
+const htbPosts = allPosts.filter(p => (p.data.series || '').includes('Hack-The-Box') || (p.data.tags || []).includes('HTB'))
+
+// ── Posts per month (actual months present in the data, not a fixed rolling window) ──
+const monthCounts = new Map<string, number>()
+for (const p of allPosts) {
+  const d = p.data.published
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  monthCounts.set(key, (monthCounts.get(key) || 0) + 1)
+}
+const sortedMonths = [...monthCounts.entries()].sort(([a], [b]) => a.localeCompare(b))
+const maxMonthCount = Math.max(1, ...sortedMonths.map(([, c]) => c))
+const monthLabel = (key: string) => {
+  const [y, m] = key.split('-')
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+}
+
+// ── Difficulty breakdown (donut) ──
+const diffOrder = ['Easy', 'Medium', 'Hard', 'Insane', 'Unknown'] as const
+const diffColors: Record<string, string> = {
+  Easy: '#4ade80', Medium: '#facc15', Hard: '#f87171', Insane: '#c084fc', Unknown: '#888888',
+}
+const diffCounts = Object.fromEntries(
+  diffOrder.map(d => [d, htbPosts.filter(p => p.data.difficulty === d).length])
+)
+const diffTotal = Object.values(diffCounts).reduce((a, b) => a + b, 0) || 1
+
+const RADIUS = 70
+const CIRC = 2 * Math.PI * RADIUS
+let cursor = 0
+const slices = diffOrder
+  .filter(d => diffCounts[d] > 0)
+  .map(d => {
+    const frac = diffCounts[d] / diffTotal
+    const length = frac * CIRC
+    const slice = { d, color: diffColors[d], length, offset: cursor, pct: Math.round(frac * 100) }
+    cursor += length
+    return slice
+  })
+
+// ── OS breakdown ──
+const winCount = htbPosts.filter(p => p.data.osType === 'Windows').length
+const linuxCount = htbPosts.filter(p => p.data.osType === 'Linux').length
+
+// ── Top techniques (tags, excluding structural ones) ──
+const EXCLUDE_TAGS = new Set(['HTB', 'PortSwigger', 'Windows', 'Linux', 'Easy', 'Medium', 'Hard', 'Insane'])
+const tagCounts = new Map<string, number>()
+for (const p of allPosts) {
+  for (const t of p.data.tags || []) {
+    if (EXCLUDE_TAGS.has(t)) continue
+    tagCounts.set(t, (tagCounts.get(t) || 0) + 1)
+  }
+}
+const topTags = [...tagCounts.entries()].sort(([, a], [, b]) => b - a).slice(0, 12)
+const maxTagCount = Math.max(1, ...topTags.map(([, c]) => c))
+
+// ── Cadence stats ──
+const totalCount = allPosts.length
+const avgPerMonth = sortedMonths.length ? (totalCount / sortedMonths.length).toFixed(1) : '0'
+const busiestMonth = sortedMonths.reduce((max, cur) => (cur[1] > max[1] ? cur : max), sortedMonths[0] || ['—', 0])
+---
+
+<Layout title="Stats" description="Auto-generated statistics from every writeup — machines per month, difficulty spread, top techniques">
+  <div class="mt-2 sm:mt-0 w-full">
+    <PageHeader title="stats" />
+    <p class="mt-3 text-sm text-foreground/45 font-mono">// generated at build time from post frontmatter — zero external services</p>
+
+    {/* ── Top-line numbers ── */}
+    <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: 'Total Posts',   value: totalCount,                            icon: '◈' },
+        { label: 'HTB Machines',  value: htbPosts.length,                       icon: '⬡' },
+        { label: 'Avg / Month',   value: avgPerMonth,                           icon: '📈' },
+        { label: 'Busiest Month', value: monthLabel(busiestMonth[0] as string), icon: '🔥' },
+      ].map(s => (
+        <div class="flex flex-col items-center justify-center gap-1 py-5 px-3 rounded-xl border-1 border-accent/12 bg-accent/3 text-center">
+          <span class="text-accent text-lg font-mono">{s.icon}</span>
+          <span class="text-2xl font-bold font-mono text-heading1">{s.value}</span>
+          <span class="text-xs text-foreground/50 uppercase tracking-widest leading-tight">{s.label}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* ── Posts per month (bar chart) ── */}
+    <section class="mt-10">
+      <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+        <span class="text-accent/40">$</span> plot posts --by month
+      </h2>
+      <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 md:p-6">
+        <div class="flex items-end gap-2 md:gap-3 h-48 overflow-x-auto pb-1">
+          {sortedMonths.map(([key, count]) => (
+            <div class="flex flex-col items-center gap-2 flex-1 min-w-[40px] h-full justify-end group">
+              <span class="text-xs font-mono text-foreground/55 group-hover:text-accent transition-colors">{count}</span>
+              <div
+                class="w-full rounded-t-md bg-accent/70 group-hover:bg-accent transition-all"
+                style={`height: ${Math.max(4, (count / maxMonthCount) * 100)}%`}
+              ></div>
+              <span class="text-xs font-mono text-foreground/40 whitespace-nowrap">{monthLabel(key)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    {/* ── Difficulty pie + OS split ── */}
+    <section class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 md:p-6">
+        <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+          <span class="text-accent/40">$</span> difficulty --distribution
+        </h2>
+        <div class="flex items-center gap-6 flex-wrap justify-center">
+          <svg viewBox="0 0 180 180" class="w-40 h-40 -rotate-90 shrink-0">
+            <circle cx="90" cy="90" r={RADIUS} fill="none" stroke="currentColor" stroke-width="20" class="text-foreground/8" />
+            {slices.map(s => (
+              <circle
+                cx="90" cy="90" r={RADIUS} fill="none"
+                stroke={s.color} stroke-width="20"
+                stroke-dasharray={`${s.length} ${CIRC - s.length}`}
+                stroke-dashoffset={-s.offset}
+                stroke-linecap="butt"
+              />
+            ))}
+            <text x="90" y="90" transform="rotate(90 90 90)" text-anchor="middle" dominant-baseline="middle"
+                  class="fill-heading1 font-mono font-bold" style="font-size: 28px;">
+              {htbPosts.length}
+            </text>
+          </svg>
+          <div class="flex flex-col gap-2">
+            {slices.map(s => (
+              <div class="flex items-center gap-2 text-sm font-mono">
+                <span class="size-2.5 rounded-full shrink-0" style={`background:${s.color}`}></span>
+                <span class="text-foreground/65 w-16">{s.d}</span>
+                <span class="text-foreground/40">{diffCounts[s.d]} ({s.pct}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 md:p-6">
+        <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+          <span class="text-accent/40">$</span> uname --tally
+        </h2>
+        <div class="flex flex-col gap-5 justify-center h-full">
+          {[
+            { label: 'Windows', count: winCount, color: 'bg-blue-400', text: 'text-blue-400' },
+            { label: 'Linux',   count: linuxCount, color: 'bg-orange-400', text: 'text-orange-400' },
+          ].map(os => {
+            const pct = htbPosts.length ? Math.round((os.count / htbPosts.length) * 100) : 0
+            return (
+              <div>
+                <div class="flex justify-between text-sm font-mono mb-1.5">
+                  <span class:list={[os.text, 'font-semibold']}>{os.label}</span>
+                  <span class="text-foreground/40">{os.count} ({pct}%)</span>
+                </div>
+                <div class="h-3 rounded-full bg-foreground/8 overflow-hidden">
+                  <div class:list={[os.color, 'h-full rounded-full transition-all']} style={`width:${pct}%`}></div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+
+    {/* ── Top techniques ── */}
+    <section class="mt-10 mb-4">
+      <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+        <span class="text-accent/40">$</span> sort tags.log | uniq -c | sort -rn | head -12
+      </h2>
+      <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 md:p-6">
+        <div class="flex flex-col gap-2.5">
+          {topTags.map(([tag, count]) => (
+            <div class="flex items-center gap-3 group">
+              <span class="text-xs font-mono text-foreground/45 w-32 sm:w-40 shrink-0 truncate group-hover:text-accent transition-colors">{tag}</span>
+              <div class="flex-1 h-2.5 rounded-full bg-foreground/8 overflow-hidden">
+                <div class="h-full rounded-full bg-accent/70 group-hover:bg-accent transition-all" style={`width:${(count / maxTagCount) * 100}%`}></div>
+              </div>
+              <span class="text-xs font-mono text-foreground/40 w-8 text-right shrink-0">{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+  </div>
+</Layout>

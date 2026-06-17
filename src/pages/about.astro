@@ -1,0 +1,274 @@
+---
+import Layout from '~/layouts/Layout.astro'
+import { getSortedPosts } from '~/utils'
+
+const allPosts = (await getSortedPosts()).reverse()
+const htbPosts = allPosts.filter(p => (p.data.series||'').includes('Hack-The-Box') || (p.data.tags||[]).includes('HTB'))
+const totalPosts = allPosts.length
+
+// time hacking estimate: each HTB machine avg 4hrs, each post ~1hr write-up
+const hrsEstimate = htbPosts.length * 5 + (allPosts.length - htbPosts.length) * 2
+
+// days since last published post — fed into the live status line
+const lastPost = allPosts[allPosts.length - 1]
+const daysSinceLastPost = lastPost
+  ? Math.floor((Date.now() - lastPost.data.published.getTime()) / 86_400_000)
+  : null
+---
+
+<Layout title="About" description="Penetration tester, red teamer, CTF player — 0xh3x_">
+
+  {/* ── HERO terminal ── */}
+  <section class="mt-4 mb-8">
+    <div class="rounded-xl border-1 border-accent/20 bg-accent/3 overflow-hidden font-mono">
+      <div class="flex items-center gap-2 px-4 py-2.5 border-b-1 border-accent/15 bg-accent/5">
+        <span class="size-3 rounded-full bg-red-400/60"></span>
+        <span class="size-3 rounded-full bg-yellow-400/60"></span>
+        <span class="size-3 rounded-full bg-green-400/60"></span>
+        <span class="ml-3 text-xs text-foreground/40 tracking-widest">0xh3x_ — operator.conf</span>
+        <span class="ml-auto text-xs text-foreground/25" id="about-clock"></span>
+      </div>
+      <div class="p-6 md:p-8 text-sm">
+        <div class="text-foreground/30 text-xs mb-5">$ cat /etc/operator.conf && uptime</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 mb-6">
+          {[
+            ['handle',   '0xh3x_'],
+            ['focus',    'Red Team · AD · Web AppSec'],
+            ['status',   'CPTS — in progress'],
+            ['github',   '0xh3x0x'],
+            ['htb',      'active'],
+            ['machines', `${htbPosts.length} pwned`],
+            ['writeups', `${totalPosts} published`],
+            ['hrs_est',  `~${hrsEstimate}h hacking`],
+          ].map(([k, v]) => (
+            <div class="flex gap-2 text-sm">
+              <span class="text-accent/55 shrink-0 w-24">{k}:</span>
+              <span class="text-foreground/75">{v}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* live status — last activity */}
+        {daysSinceLastPost !== null && (
+          <div class="flex items-center gap-2 text-xs font-mono mb-5 -mt-1">
+            <span class="relative flex size-2">
+              <span class="absolute inline-flex size-full rounded-full bg-green-400 opacity-60 animate-ping"></span>
+              <span class="relative inline-flex size-2 rounded-full bg-green-400"></span>
+            </span>
+            <span class="text-foreground/45">
+              last write-up {daysSinceLastPost === 0 ? 'published today' : `${daysSinceLastPost} day${daysSinceLastPost === 1 ? '' : 's'} ago`}
+            </span>
+          </div>
+        )}
+
+        <div class="border-t-1 border-accent/10 pt-5 text-foreground/60 leading-relaxed max-w-3xl">
+          I'm a penetration tester with a strong focus on offensive security, red teaming, and real-world attack simulation.
+          I break into systems (legally), build labs simulating enterprise misconfigurations, and automate the boring parts of
+          red teaming so I can focus on the interesting ones. Every machine I pwn gets documented — for personal mastery and
+          to contribute back to the community.
+        </div>
+
+        {/* animated prompt */}
+        <div class="mt-4 text-sm">
+          <span class="text-accent">➜</span>
+          <span class="text-foreground/35 ml-2" id="about-typewriter"></span>
+          <span class="text-accent animate-pulse font-bold">▋</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ── QUICK NUMBERS ── */}
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+    {[
+      { label: 'Machines Pwned', value: htbPosts.length,  icon: '⬡', sub: 'HTB writeups', href: '/posts#htb' },
+      { label: 'Total Posts',    value: totalPosts,        icon: '◈', sub: 'published',    href: '/posts#all' },
+      { label: 'Est. Hrs',       value: `${hrsEstimate}+`, icon: '⏱', sub: 'hacking time', href: '/stats' },
+      { label: 'Certs',          value: '4+',              icon: '✓', sub: '1 in progress', href: '#credentials' },
+    ].map(s => (
+      <a href={s.href} class="flex flex-col items-center justify-center gap-0.5 py-5 px-3 rounded-xl border-1 border-accent/12 bg-accent/3 hover:bg-accent/8 hover:border-accent/30 transition-all text-center">
+        <span class="text-accent text-lg font-mono">{s.icon}</span>
+        <span class="text-2xl font-bold font-mono text-heading1">{s.value}</span>
+        <span class="text-xs text-foreground/50 uppercase tracking-widest leading-tight">{s.label}</span>
+        <span class="text-xs text-foreground/30 font-mono">{s.sub}</span>
+      </a>
+    ))}
+  </div>
+  <div class="mb-10 flex justify-end">
+    <a href="/stats" class="text-xs font-mono text-accent/60 hover:text-accent transition-colors flex items-center gap-1.5">
+      <span class="text-accent/40">$</span> view full breakdown --charts <span class="text-accent">→</span>
+    </a>
+  </div>
+
+  {/* ── CERTIFICATIONS ── */}
+  <section id="credentials" class="mb-10">
+    <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+      <span class="text-accent/40">$</span> credentials --list --operator 0xh3x
+    </h2>
+    <div class="rounded-xl border-1 border-accent/15 bg-accent/3 overflow-hidden font-mono text-sm">
+      <div class="px-5 py-3 border-b-1 border-accent/10 text-foreground/30 text-xs flex items-center gap-2">
+        <span>root@kali:~#</span>
+        <span class="text-foreground/50">credentials --summary</span>
+      </div>
+      <div class="p-5 space-y-3">
+        {[
+          { status: '✓', id: 'OSCP',      name: 'Offensive Security Certified Professional', done: true  },
+          { status: '✓', id: 'eJPT',      name: 'eLearnSecurity Junior Penetration Tester',  done: true  },
+          { status: '✓', id: 'PT1',        name: 'Junior Penetration Tester',                 done: true  },
+          { status: '✓', id: 'Google CS',  name: 'Google CyberSecurity',                      done: true  },
+          { status: '*', id: 'CPTS',       name: 'Certified Penetration Testing Specialist',  done: false },
+        ].map(c => (
+          <div class="flex items-center gap-3 group">
+            <span class:list={['shrink-0 font-bold w-5 text-center', c.done ? 'text-green-400' : 'text-yellow-400']}>[{c.status}]</span>
+            <span class="text-accent w-24 shrink-0 text-xs">{c.id}</span>
+            <span class="text-foreground/50 text-xs">→</span>
+            <span class="text-foreground/65 text-xs flex-1">{c.name}</span>
+            {!c.done && (
+              <span class="text-xs text-yellow-400/70 border-1 border-yellow-400/20 bg-yellow-400/5 px-2 py-0.5 rounded-full whitespace-nowrap">
+                IN PROGRESS
+              </span>
+            )}
+          </div>
+        ))}
+        <div class="pt-3 border-t-1 border-accent/10 text-foreground/25 text-xs">
+          4 credentials loaded. 1 pending acquisition.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ── SKILLS ── */}
+  <section class="mb-10">
+    <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+      <span class="text-accent/40">$</span> capability-scan --verbose
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {[
+        {
+          label: 'Technical Domains', icon: '⬡',
+          items: ['Penetration Testing','Web Application Security','Active Directory','API Security','Android AppSec','Privilege Escalation','Post Exploitation','Red Teaming','Vulnerability Management','Network Security'],
+        },
+        {
+          label: 'Security Tools', icon: '⬢',
+          items: ['Burp Suite Pro','Nmap','BloodHound','CrackMapExec / NetExec','Metasploit','Impacket','Sliver C2','Wireshark','Nessus','OWASP ZAP','Acunetix','GoPhish','Wazuh SIEM'],
+        },
+        {
+          label: 'Cloud & Infrastructure', icon: '◈',
+          items: ['Azure Cloud Security','Azure IAM','Azure DevOps','Docker','Kubernetes','CI/CD Pipelines','Firewalls & ACLs','Virtual Machines'],
+        },
+        {
+          label: 'Scripting & Automation', icon: '◆',
+          items: ['Python','Bash','PowerShell','SQL','C / C++ (Basics)','AI Model Integration','MCP Tooling'],
+        },
+      ].map(group => (
+        <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 hover:border-accent/25 transition-all">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-accent font-mono">{group.icon}</span>
+            <span class="font-semibold text-heading1 text-sm">{group.label}</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            {group.items.map(item => (
+              <span class="text-xs font-mono px-2.5 py-1 rounded-full border-1 border-accent/15 bg-accent/5 text-foreground/60 hover:text-accent hover:border-accent/30 transition-colors cursor-default">
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  {/* ── PROJECTS ── */}
+  <section class="mb-10">
+    <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+      <span class="text-accent/40">$</span> ls ~/projects/ --details
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {[
+        {
+          name: 'MAD — MindFlayer\'s Active Directory',
+          desc: 'Lab environment simulating real enterprise Active Directory misconfigurations — built for practising AD attack chains end to end.',
+          url: 'https://github.com/0xh3x0x/MAD',
+          tags: ['Active Directory','Lab','PowerShell'],
+          icon: '⬡', stars: null,
+        },
+        {
+          name: 'RevShellCraft',
+          desc: 'Reverse shell generation and management utility for pentesters. Quickly craft payloads across protocols — because copy-pasting cheat sheets gets old fast.',
+          url: 'https://github.com/0xh3x0x/RevShellCraft',
+          tags: ['Python','Red Team','Automation'],
+          icon: '◆', stars: null,
+        },
+      ].map(p => (
+        <a href={p.url} target="_blank" rel="noopener noreferrer"
+           class="group flex flex-col gap-3 p-5 rounded-xl border-1 border-accent/15 bg-accent/3 hover:border-accent/35 hover:bg-accent/7 transition-all">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-accent font-mono">{p.icon}</span>
+              <span class="font-bold text-heading1 text-sm group-hover:text-accent transition-colors">{p.name}</span>
+            </div>
+            <span class="text-accent/40 text-xs shrink-0 group-hover:text-accent transition-colors font-mono">↗</span>
+          </div>
+          <p class="text-sm text-foreground/55 leading-relaxed">{p.desc}</p>
+          <div class="flex flex-wrap gap-1.5 mt-auto">
+            {p.tags.map(t => (
+              <span class="text-xs font-mono px-2 py-0.5 rounded-full border-1 border-accent/15 text-accent/55 bg-accent/5">{t}</span>
+            ))}
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  {/* ── CONNECT / SOCIAL ── */}
+  <section class="mb-4">
+    <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+      <span class="text-accent/40">$</span> netstat --social --established
+    </h2>
+    <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 font-mono text-sm">
+      <div class="text-foreground/25 text-xs mb-4">Active connections:</div>
+      <div class="space-y-3">
+        {[
+          { proto: 'HTTPS', local: '0xh3x0x',                    remote: 'github.com',    label: 'GitHub',   href: 'https://github.com/0xh3x0x' },
+          { proto: 'HTTPS', local: 'kamlesh-kathiriya',           remote: 'linkedin.com',  label: 'LinkedIn', href: 'https://www.linkedin.com/in/kamlesh-kathiriya' },
+          { proto: 'SMTP',  local: 'kamleshkathiriya001@gmail',   remote: 'mail.server',   label: 'Email',    href: 'mailto:kamleshkathiriya001@gmail.com' },
+        ].map(s => (
+          <a href={s.href} target="_blank" rel="noopener noreferrer"
+             class="flex items-center gap-3 group hover:text-accent transition-colors">
+            <span class="text-green-400/60 text-xs w-12 shrink-0">{s.proto}</span>
+            <span class="text-foreground/50 text-xs flex-1 truncate">{s.local} → {s.remote}</span>
+            <span class="text-accent/50 text-xs group-hover:text-accent transition-colors ml-auto shrink-0">{s.label} ↗</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+</Layout>
+
+<script>
+  // live clock
+  function tick() {
+    const el = document.getElementById('about-clock')
+    if (el) el.textContent = new Date().toLocaleTimeString()
+  }
+  tick(); setInterval(tick, 1000)
+
+  // typewriter
+  const lines = ['./run-exploit.sh --target all', 'bloodhound-python -c All', 'cat /root/root.txt', 'proxychains crackmapexec smb 10.10.11.0/24']
+  let li = 0, ci = 0, del = false, paused = false
+  const el = document.getElementById('about-typewriter')
+  if (el) {
+    setInterval(() => {
+      if (paused) return
+      const line = lines[li % lines.length]
+      if (!del) {
+        el.textContent = line.slice(0, ++ci)
+        if (ci >= line.length) { del = true; paused = true; setTimeout(() => { paused = false }, 1600) }
+      } else {
+        el.textContent = line.slice(0, --ci)
+        if (ci === 0) { del = false; li++; paused = true; setTimeout(() => { paused = false }, 400) }
+      }
+    }, del ? 30 : 70)
+  }
+</script>

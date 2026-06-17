@@ -1,0 +1,40 @@
+---
+import Layout from '~/layouts/Layout.astro'
+---
+
+<Layout title="404" description="Target not found">
+  <div class="mt-10 mb-6 max-w-2xl mx-auto font-mono">
+    <div class="rounded-xl border-1 border-accent/20 bg-accent/3 overflow-hidden">
+      <div class="flex items-center gap-2 px-4 py-2.5 border-b-1 border-accent/15 bg-accent/5">
+        <span class="size-3 rounded-full bg-red-400/60"></span>
+        <span class="size-3 rounded-full bg-yellow-400/60"></span>
+        <span class="size-3 rounded-full bg-green-400/60"></span>
+        <span class="ml-3 text-xs text-foreground/40 tracking-widest">0xh3x_ ~ zsh</span>
+      </div>
+      <div class="p-6 md:p-8 text-sm leading-relaxed">
+        <div class="text-foreground/30 text-xs mb-4">$ curl -I {Astro.url.pathname}</div>
+        <div class="text-red-400 font-bold text-lg mb-1">HTTP/1.1 404 Not Found</div>
+        <div class="text-foreground/50 mb-6">// the requested resource does not exist on this host</div>
+
+        <div class="text-foreground/30 text-xs mb-2">$ nmap -p- {Astro.url.pathname}</div>
+        <pre class="text-foreground/60 text-xs leading-snug mb-6 whitespace-pre-wrap">PORT     STATE    SERVICE
+404/tcp  closed   page-not-found
+418/tcp  filtered im-a-teapot
+???/tcp  unknown  ¯\_(ツ)_/¯</pre>
+
+        <div class="text-foreground/30 text-xs mb-2">$ suggestions --next-steps</div>
+        <ul class="space-y-1.5 text-foreground/65 mb-6">
+          <li class="flex gap-2"><span class="text-accent/50">›</span><span>Check the URL for typos — paths are case sensitive</span></li>
+          <li class="flex gap-2"><span class="text-accent/50">›</span><span>The page may have been moved or renamed during a refactor</span></li>
+          <li class="flex gap-2"><span class="text-accent/50">›</span><span>Head back to a known-good route below</span></li>
+        </ul>
+
+        <div class="flex flex-wrap gap-2 pt-4 border-t-1 border-accent/10">
+          <a href="/" class="button text-xs">cd ~</a>
+          <a href="/posts" class="button text-xs">ls posts/</a>
+          <a href="/stats" class="button text-xs">cat stats</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,194 @@
+---
+import Layout from '~/layouts/Layout.astro'
+import { getSortedPosts } from '~/utils'
+import { getCollection, render } from 'astro:content'
+import PostPreview from '~/components/PostPreview.astro'
+import Pagination from '~/components/Pagination.astro'
+import BlockHeader from '~/components/BlockHeader.astro'
+import HomeBanner from '~/components/HomeBanner.astro'
+import siteConfig from '~/site.config'
+import TagsSection from '~/components/TagsSection.astro'
+import SeriesSection from '~/components/SeriesSection.astro'
+import ArchiveCard from '~/components/ArchiveCard.astro'
+
+const home = await getCollection('home')
+let HomeContent
+let homeAvatarImage
+let homeGithubCalendar
+if (home.length > 0) {
+  const homeEntry = home[0]
+  const { Content } = await render(homeEntry)
+  HomeContent = Content
+  homeAvatarImage = homeEntry.data.avatarImage
+  homeGithubCalendar = homeEntry.data.githubCalendar
+}
+const sortedPosts = await getSortedPosts()
+const postsHaveTags = sortedPosts.some(
+  (post) => post.data.tags && post.data.tags.length > 0,
+)
+
+const postsHaveSeries = sortedPosts.some((post) => post.data.series)
+const allPosts = [...sortedPosts].reverse()
+
+const htbPosts   = allPosts.filter(p => (p.data.series || '').includes('Hack-The-Box') || (p.data.tags||[]).includes('HTB'))
+const psPosts    = allPosts.filter(p => (p.data.tags||[]).includes('PortSwigger') || (p.data.series||'').toLowerCase().includes('portswigger'))
+const blogPosts  = allPosts.filter(p => {
+  const isHTB = (p.data.series||'').includes('Hack-The-Box') || (p.data.tags||[]).includes('HTB')
+  const isPS  = (p.data.tags||[]).includes('PortSwigger')
+  return !isHTB && !isPS
+})
+
+const recentPosts = allPosts.slice(0, 4)
+
+// Difficulty counts
+const diffs = ['Easy','Medium','Hard','Insane']
+const diffCounts = Object.fromEntries(diffs.map(d => [d, htbPosts.filter(p => p.data.difficulty === d || (p.data.tags||[]).includes(d)).length]))
+
+---
+
+<Layout>
+  {
+    HomeContent && (
+      <HomeBanner avatarImage={homeAvatarImage} githubCalendar={homeGithubCalendar}>
+        <HomeContent />
+      </HomeBanner>
+    )
+  }
+  <section class="mb-10">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: 'Total Posts',   value: allPosts.length,  icon: '◈', href: '/posts' },
+        { label: 'HTB Machines',  value: htbPosts.length,  icon: '⬡', href: '/posts#htb' },
+        { label: 'PortSwigger',   value: psPosts.length,   icon: '⬢', href: '/posts#portswigger' },
+        { label: 'Blog Posts',    value: blogPosts.length, icon: '◆', href: '/posts#blog' },
+      ].map(s => (
+        <a href={s.href} class="group flex flex-col items-center justify-center gap-1 py-5 px-3 rounded-xl border-1 border-accent/12 bg-accent/3 hover:bg-accent/8 hover:border-accent/30 transition-all text-center">
+          <span class="text-accent text-xl font-mono">{s.icon}</span>
+          <span class="text-3xl font-bold font-mono text-heading1">{s.value}</span>
+          <span class="text-xs text-foreground/50 uppercase tracking-widest">{s.label}</span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  {/* ── CATEGORY CARDS ── */}
+  <section class="mb-10">
+    <h2 class="text-accent font-mono text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+      <span class="text-accent/40">$</span> ls categories/
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+      {/* HTB */}
+      <a href="/posts" class="group relative flex flex-col gap-3 p-5 rounded-xl border-1 border-accent/15 bg-accent/3 hover:border-accent/35 hover:bg-accent/7 transition-all overflow-hidden">
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+             style="background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--theme-accent), 4%, transparent), transparent 70%)"></div>
+        <div class="flex items-center justify-between">
+          <span class="text-3xl font-black font-mono text-accent/80">⬡</span>
+          <span class="text-xs font-mono text-foreground/35 border-1 border-accent/15 px-2 py-1 rounded-full">{htbPosts.length} machines</span>
+        </div>
+        <div>
+          <div class="font-bold text-heading1 text-lg mb-1">Hack The Box</div>
+          <div class="text-sm text-foreground/55 leading-relaxed">Full machine walkthroughs — enumeration, exploitation, privilege escalation.</div>
+        </div>
+        {/* difficulty pills */}
+        <div class="flex flex-wrap gap-1.5 mt-auto pt-1">
+          {[
+            { d: 'Easy',   c: 'text-green-400  border-green-400/25  bg-green-400/6'  },
+            { d: 'Medium', c: 'text-yellow-400 border-yellow-400/25 bg-yellow-400/6' },
+            { d: 'Hard',   c: 'text-red-400    border-red-400/25    bg-red-400/6'    },
+            { d: 'Insane', c: 'text-purple-400 border-purple-400/25 bg-purple-400/6' },
+          ].map(({ d, c }) => (
+            <span class:list={['text-xs font-mono px-2 py-0.5 rounded-full border-1', c]}>
+              {diffCounts[d]} {d}
+            </span>
+          ))}
+        </div>
+      </a>
+
+      {/* PortSwigger */}
+      <a href="/posts" class="group relative flex flex-col gap-3 p-5 rounded-xl border-1 border-accent/15 bg-accent/3 hover:border-accent/35 hover:bg-accent/7 transition-all overflow-hidden">
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+             style="background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--theme-accent), 4%, transparent), transparent 70%)"></div>
+        <div class="flex items-center justify-between">
+          <span class="text-3xl font-black font-mono text-accent/80">⬢</span>
+          <span class="text-xs font-mono text-foreground/35 border-1 border-accent/15 px-2 py-1 rounded-full">{psPosts.length} labs</span>
+        </div>
+        <div>
+          <div class="font-bold text-heading1 text-lg mb-1">PortSwigger Labs</div>
+          <div class="text-sm text-foreground/55 leading-relaxed">Web security labs — SQLi, XSS, SSRF, deserialization and more.</div>
+        </div>
+        <div class="mt-auto pt-1 text-xs font-mono text-foreground/30 italic">
+          {psPosts.length === 0 ? '// writeups coming soon' : `Latest: ${psPosts[0]?.data.title}`}
+        </div>
+      </a>
+
+      {/* Blog */}
+      <a href="/posts" class="group relative flex flex-col gap-3 p-5 rounded-xl border-1 border-accent/15 bg-accent/3 hover:border-accent/35 hover:bg-accent/7 transition-all overflow-hidden">
+        <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+             style="background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--theme-accent), 4%, transparent), transparent 70%)"></div>
+        <div class="flex items-center justify-between">
+          <span class="text-3xl font-black font-mono text-accent/80">◆</span>
+          <span class="text-xs font-mono text-foreground/35 border-1 border-accent/15 px-2 py-1 rounded-full">{blogPosts.length} posts</span>
+        </div>
+        <div>
+          <div class="font-bold text-heading1 text-lg mb-1">Blog</div>
+          <div class="text-sm text-foreground/55 leading-relaxed">Security research, tooling deep-dives, notes from the field.</div>
+        </div>
+        <div class="mt-auto pt-1 text-xs font-mono text-foreground/30 italic">
+          {blogPosts.length === 0 ? '// posts coming soon' : `Latest: ${blogPosts[0]?.data.title}`}
+        </div>
+      </a>
+    </div>
+  </section>
+
+  {/* ── RECENT POSTS ── */}
+  <section class="mb-6">
+    <h2 class="text-accent font-mono text-sm uppercase tracking-widest mb-4 flex items-center gap-2">
+      <span class="text-accent/40">$</span> tail -4 posts.log
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {recentPosts.map(post => <ArchiveCard post={post} />)}
+    </div>
+    <div class="mt-5 flex justify-end">
+      <a href="/posts" class="button text-sm font-mono flex items-center gap-2">
+        cat posts/ --all <span class="text-accent">→</span>
+      </a>
+    </div>
+  </section>
+</Layout>
+
+<style is:global>
+  a.heading-anchor {
+    display: none !important;
+  }
+</style>
+<style is:global>
+  a.heading-anchor { display: none !important; }
+  .typewriter-cursor { animation: blink 1s step-end infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+</style>
+<script>
+  const lines = [
+    'ls -la writeups/',
+    'nmap -sV -sC target',
+    'python3 exploit.py --target pwned',
+    'cat root.txt',
+    'sudo -l',
+    'git commit -m "pwned another one"',
+  ]
+  let li = 0, ci = 0, deleting = false
+  const el = document.getElementById('typewriter')
+  if (el) {
+    setInterval(() => {
+      const line = lines[li % lines.length]
+      if (!deleting) {
+        el.textContent = line.slice(0, ++ci)
+        if (ci >= line.length) { deleting = true; setTimeout(() => {}, 1200) }
+      } else {
+        el.textContent = line.slice(0, --ci)
+        if (ci === 0) { deleting = false; li++ }
+      }
+    }, deleting ? 40 : 80)
+  }
+</script>
+

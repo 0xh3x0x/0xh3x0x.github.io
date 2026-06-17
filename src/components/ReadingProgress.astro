@@ -1,0 +1,30 @@
+---
+// Drop this into any layout where you want a scroll progress bar
+---
+<div
+  id="reading-progress"
+  class="fixed top-0 left-0 z-[9999] h-[2px] w-0 transition-none pointer-events-none"
+  style="background: var(--theme-accent); box-shadow: 0 0 8px var(--theme-accent);"
+  aria-hidden="true"
+></div>
+
+<script>
+  function initProgress() {
+    const bar = document.getElementById('reading-progress')
+    if (!bar) return
+    // Only show on post pages
+    const isPost = location.pathname.startsWith('/posts/') && location.pathname.split('/').length > 3
+    if (!isPost) { bar.style.width = '0'; return }
+
+    function update() {
+      const scrollTop  = window.scrollY
+      const docHeight  = document.documentElement.scrollHeight - window.innerHeight
+      const pct        = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
+      bar.style.width  = pct + '%'
+    }
+    window.addEventListener('scroll', update, { passive: true })
+    update()
+  }
+  initProgress()
+  document.addEventListener('astro:after-swap', initProgress)
+</script>
