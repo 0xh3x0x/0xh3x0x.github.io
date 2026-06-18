@@ -1,0 +1,188 @@
+---
+import Layout from '~/layouts/Layout.astro'
+import PageHeader from '~/components/PageHeader.astro'
+import ArchiveCard from '~/components/ArchiveCard.astro'
+import { getSortedPosts } from '~/utils'
+
+const allPosts = (await getSortedPosts()).reverse()
+const adPosts = allPosts.filter(p => (p.data.tags || []).includes('Active Directory'))
+
+// technique frequency across AD posts, used to size the concept pills
+const AD_TAGS = new Set([
+  'Kerberoasting', 'AS-REP Roasting', 'DCSync', 'BloodHound', 'NTLM',
+  'Pass-the-Hash', 'Pass-the-Ticket', 'Password Spraying', 'WinRM', 'LDAP',
+  'SMB', 'GPO',
+])
+const tagCounts = new Map<string, number>()
+for (const p of adPosts) {
+  for (const t of p.data.tags || []) {
+    if (AD_TAGS.has(t)) tagCounts.set(t, (tagCounts.get(t) || 0) + 1)
+  }
+}
+
+// attack-chain stages, each grounded in tags actually present in your posts
+const stages = [
+  {
+    phase: '01',
+    title: 'Enumeration',
+    icon: '◎',
+    blurb: 'Mapping the domain before touching anything — users, groups, shares, trust relationships, and the DNS/LDAP surface that everything else depends on.',
+    techniques: ['LDAP', 'SMB', 'DNS', 'Nmap', 'BloodHound'],
+  },
+  {
+    phase: '02',
+    title: 'Initial Foothold',
+    icon: '◐',
+    blurb: 'Turning enumeration into a foothold — guessable creds, exposed services, or a foothold via web/file-upload vectors common on AD-adjacent boxes.',
+    techniques: ['Password Spraying', 'Brute Force', 'WinRM', 'RDP'],
+  },
+  {
+    phase: '03',
+    title: 'Credential Attacks',
+    icon: '◑',
+    blurb: 'Abusing Kerberos and NTLM itself — requesting service tickets to crack offline, or replaying hashes without ever knowing the plaintext.',
+    techniques: ['Kerberoasting', 'AS-REP Roasting', 'NTLM', 'Pass-the-Hash', 'Password Cracking'],
+  },
+  {
+    phase: '04',
+    title: 'Lateral Movement',
+    icon: '◒',
+    blurb: 'Moving from one foothold to the next host or identity — re-using tickets, pivoting through trust relationships, riding misconfigured permissions.',
+    techniques: ['Pass-the-Ticket', 'WinRM', 'BloodHound'],
+  },
+  {
+    phase: '05',
+    title: 'Domain Dominance',
+    icon: '●',
+    blurb: 'The endgame — replicating the directory itself or abusing Group Policy to push commands domain-wide. Game over for the forest.',
+    techniques: ['DCSync', 'GPO'],
+  },
+]
+---
+
+<Layout title="Active Directory" description="Active Directory attack theory and writeups — enumeration through domain dominance">
+  <div class="mt-2 sm:mt-0 w-full">
+    <PageHeader title="active directory" />
+
+    <p class="mt-3 text-sm text-foreground/50 max-w-2xl leading-relaxed">
+      Active Directory is the backbone of most enterprise networks — and the single biggest
+      attack surface in any internal pentest. This section walks through the attack chain
+      stage by stage, with every concept backed by a real writeup below.
+    </p>
+
+    {/* ── Stats strip ── */}
+    <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {[
+        { label: 'AD Writeups', value: adPosts.length, icon: '⬡' },
+        { label: 'Kerberoasting', value: tagCounts.get('Kerberoasting') || 0, icon: '🔑' },
+        { label: 'DCSync', value: tagCounts.get('DCSync') || 0, icon: '⚡' },
+        { label: 'BloodHound', value: tagCounts.get('BloodHound') || 0, icon: '🐺' },
+      ].map(s => (
+        <div class="flex flex-col items-center justify-center gap-1 py-4 px-3 rounded-xl border-1 border-accent/12 bg-accent/3 text-center">
+          <span class="text-accent text-lg font-mono">{s.icon}</span>
+          <span class="text-2xl font-bold font-mono text-heading1">{s.value}</span>
+          <span class="text-xs text-foreground/50 uppercase tracking-widest leading-tight">{s.label}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* ── Attack chain ── */}
+    <section class="mt-10">
+      <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+        <span class="text-accent/40">$</span> cat attack-chain.md
+      </h2>
+      <div class="relative pl-4">
+        <div class="absolute left-0 top-2 bottom-2 w-px bg-accent/15"></div>
+        <div class="space-y-4">
+          {stages.map(stage => (
+            <div class="relative pl-6">
+              <div class="absolute left-0 top-2 -translate-x-1/2 size-2.5 rounded-full bg-accent/60 ring-4 ring-background"></div>
+              <div class="rounded-xl border-1 border-accent/15 bg-accent/3 p-5 hover:border-accent/30 hover:bg-accent/6 transition-all">
+                <div class="flex items-start justify-between gap-3 mb-2">
+                  <div class="flex items-center gap-3">
+                    <span class="text-accent/50 font-mono text-xs">{stage.phase}</span>
+                    <span class="text-2xl font-mono text-accent/70">{stage.icon}</span>
+                    <span class="font-bold text-heading1">{stage.title}</span>
+                  </div>
+                </div>
+                <p class="text-sm text-foreground/60 leading-relaxed mb-3">{stage.blurb}</p>
+                <div class="flex flex-wrap gap-1.5">
+                  {stage.techniques.map(t => (
+                    <a
+                      href={`/posts#all`}
+                      data-tech-filter={t}
+                      class="tech-pill text-xs font-mono px-2.5 py-1 rounded-full border-1 border-accent/20 text-accent/70 bg-accent/5 hover:bg-accent/15 hover:border-accent/40 transition-all cursor-pointer"
+                    >
+                      {t}{tagCounts.has(t) ? ` (${tagCounts.get(t)})` : ''}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    {/* ── Writeups ── */}
+    <section class="mt-10 mb-4">
+      <h2 class="text-accent font-mono text-xs uppercase tracking-widest mb-5 flex items-center gap-2">
+        <span class="text-accent/40">$</span> ls writeups/ --filter=active-directory
+      </h2>
+      <div class="relative mb-5">
+        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
+        <input
+          type="text"
+          id="ad-search"
+          placeholder="grep machine..."
+          autocomplete="off"
+          class="w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
+        />
+      </div>
+      <div id="ad-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {adPosts.map(post => (
+          <div class="ad-card" data-tags={(post.data.tags || []).join('|')}>
+            <ArchiveCard post={post} />
+          </div>
+        ))}
+      </div>
+      {adPosts.length === 0 && (
+        <p class="text-foreground/40 font-mono text-center py-12">// no Active Directory writeups tagged yet</p>
+      )}
+    </section>
+  </div>
+</Layout>
+
+<script>
+  function initADPage() {
+    const search = document.getElementById('ad-search') as HTMLInputElement | null
+    const grid = document.getElementById('ad-grid')
+    if (!search || !grid) return
+
+    function applyFilter(query: string) {
+      const q = query.toLowerCase().trim()
+      grid!.querySelectorAll<HTMLElement>('.ad-card').forEach(card => {
+        const tags = (card.dataset.tags || '').toLowerCase()
+        const text = card.textContent?.toLowerCase() || ''
+        const show = !q || tags.includes(q) || text.includes(q)
+        card.style.display = show ? '' : 'none'
+      })
+    }
+
+    search.addEventListener('input', () => applyFilter(search.value))
+
+    // clicking a technique pill in the attack chain pre-fills the search
+    document.querySelectorAll<HTMLAnchorElement>('.tech-pill').forEach(pill => {
+      pill.addEventListener('click', (e) => {
+        e.preventDefault()
+        const tech = pill.dataset.techFilter || ''
+        search.value = tech
+        applyFilter(tech)
+        grid!.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    })
+  }
+
+  initADPage()
+  document.addEventListener('astro:after-swap', initADPage)
+</script>

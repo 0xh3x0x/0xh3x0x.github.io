@@ -2,7 +2,7 @@ import type { SiteConfig } from '~/types'
 
 const config: SiteConfig = {
   // Absolute URL to the root of your published site, used for generating links and sitemaps.
-  site: 'https://0xh3x0x.github.io',
+  site: 'https://multiterm.stelclementine.com',
   // The name of your site, used in the title and for SEO.
   title: '0xh3x_',
   // The description of your site, used for SEO and RSS feed.
@@ -41,6 +41,10 @@ const config: SiteConfig = {
       url: '/posts',
     },
     {
+      name: 'Active Directory',
+      url: '/ad',
+    },
+    {
       name: 'Stats',
       url: '/stats',
     },
@@ -56,7 +60,7 @@ const config: SiteConfig = {
     mode: 'light-dark-auto',
     // The default theme identifier, used when themeMode is "select" or "light-dark-auto".
     // Make sure this is one of the themes listed in `themes` or "auto" for "light-dark-auto" mode.
-    default: 'aurora-x',
+    default: 'vitesse-black',
     // Shiki themes to bundle with the site.
     // https://expressive-code.com/guides/themes/#using-bundled-themes
     // These will be used to theme the entire site along with syntax highlighting.
@@ -167,11 +171,11 @@ const config: SiteConfig = {
   // IMPORTANT: Update giscus.json in the root of the project with your own website URL
   // If you don't want to use Giscus, set this to undefined.
   giscus: {
-    repo: '0xh3x0x/0xh3x0x.github.io',
-    repoId: 'R_kgDOS9c1IA',
-    category: 'General',
-    categoryId: 'DIC_kwDOS9c1IM4C_aPL',
-    reactionsEnabled: true, // Enable reactions on post itself
+    repo: 'undefined',
+    repoId: 'undefined',
+    category: 'undefined',
+    categoryId: 'undefined',
+    reactionsEnabled: false, // Enable reactions on post itself
   },
   // These are characters available for the character chat feature.
   // To add your own character, add an image file to the top-level `/public` directory

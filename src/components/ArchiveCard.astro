@@ -40,7 +40,10 @@ const techTags = tags.filter((t: string) => !['HTB','PortSwigger'].includes(t)).
   class="group flex flex-col gap-1.5 p-4 rounded-lg border-1 border-accent/10 bg-accent/2 hover:bg-accent/6 hover:border-accent/25 transition-all duration-200"
 >
   <div class="flex items-start justify-between gap-2">
-    <span class="font-semibold text-heading1 text-base group-hover:text-accent transition-colors leading-snug line-clamp-2">
+    <span
+      class="glitch-title font-semibold text-heading1 text-base group-hover:text-accent transition-colors leading-snug line-clamp-2"
+      data-text={post.data.title}
+    >
       {post.data.title}
     </span>
     <span class="shrink-0 text-xs text-foreground/50 mt-0.5 font-mono whitespace-nowrap">
@@ -76,3 +79,60 @@ const techTags = tags.filter((t: string) => !['HTB','PortSwigger'].includes(t)).
     </span>
   </div>
 </a>
+
+<style>
+  .glitch-title {
+    position: relative;
+    display: block;
+  }
+  .glitch-title::before,
+  .glitch-title::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    opacity: 0;
+    overflow: hidden;
+    background: var(--theme-background);
+  }
+  .glitch-title::before {
+    color: #ff3b6b;
+    clip-path: inset(0 0 0 0);
+  }
+  .glitch-title::after {
+    color: #3bdfff;
+    clip-path: inset(0 0 0 0);
+  }
+
+  .group:hover .glitch-title::before {
+    opacity: 0.7;
+    animation: glitch-shift-1 0.35s steps(2, end) 1;
+  }
+  .group:hover .glitch-title::after {
+    opacity: 0.7;
+    animation: glitch-shift-2 0.35s steps(2, end) 1;
+  }
+
+  @keyframes glitch-shift-1 {
+    0%   { transform: translate(0, 0);     clip-path: inset(0 0 80% 0); }
+    20%  { transform: translate(-2px, 1px); clip-path: inset(10% 0 60% 0); }
+    40%  { transform: translate(2px, -1px); clip-path: inset(40% 0 30% 0); }
+    60%  { transform: translate(-1px, 1px); clip-path: inset(60% 0 10% 0); }
+    80%  { transform: translate(1px, 0);    clip-path: inset(80% 0 0 0); }
+    100% { transform: translate(0, 0); opacity: 0; }
+  }
+  @keyframes glitch-shift-2 {
+    0%   { transform: translate(0, 0);      clip-path: inset(80% 0 0 0); }
+    20%  { transform: translate(2px, -1px); clip-path: inset(60% 0 10% 0); }
+    40%  { transform: translate(-2px, 1px); clip-path: inset(30% 0 40% 0); }
+    60%  { transform: translate(1px, -1px); clip-path: inset(10% 0 60% 0); }
+    80%  { transform: translate(-1px, 0);   clip-path: inset(0 0 80% 0); }
+    100% { transform: translate(0, 0); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glitch-title::before,
+    .glitch-title::after { display: none; }
+  }
+</style>

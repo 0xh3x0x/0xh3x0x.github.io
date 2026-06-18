@@ -1,0 +1,89 @@
+---
+// Wraps content that should glitch-decrypt once when the page first loads
+// (not on scroll — see HeadingScramble.astro for the scroll-triggered
+// version). Intended for hero/identity elements like the "0xh3x_" handle.
+// Usage: <GlitchOnLoad text="0xh3x_"><span class="...">0xh3x_</span></GlitchOnLoad>
+interface Props {
+  text: string
+  class?: string
+}
+const { text, class: className = '' } = Astro.props
+---
+
+<span class:list={['glitch-load', className]} data-glitch-text={text}>{text}</span>
+
+<style>
+  .glitch-load {
+    position: relative;
+    display: inline-block;
+  }
+</style>
+
+<script>
+  const GLYPHS = '!<>-_\\/[]{}—=+*^?#0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  function runGlitch(el: HTMLElement) {
+    if (el.dataset.glitched === 'done') return
+    const original = el.dataset.glitchText || el.textContent || ''
+    if (!original.trim()) return
+
+    el.dataset.glitched = 'running'
+    el.setAttribute('aria-label', original)
+
+    const chars = original.split('')
+    const duration = 650
+    const startTime = performance.now()
+
+    // brief RGB-split flicker class toggling alongside the character reveal
+    el.classList.add('is-glitching')
+
+    function frame(now: number) {
+      const elapsed = now - startTime
+      const progress = Math.min(1, elapsed / duration)
+      const revealCount = Math.floor(progress * chars.length)
+
+      let out = ''
+      for (let i = 0; i < chars.length; i++) {
+        if (chars[i] === ' ') { out += ' '; continue }
+        out += i < revealCount ? chars[i] : GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+      }
+      el.textContent = out
+
+      if (progress < 1) {
+        requestAnimationFrame(frame)
+      } else {
+        el.textContent = original
+        el.dataset.glitched = 'done'
+        setTimeout(() => el.classList.remove('is-glitching'), 120)
+      }
+    }
+    requestAnimationFrame(frame)
+  }
+
+  function initGlitchLoad() {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const targets = document.querySelectorAll<HTMLElement>('.glitch-load')
+    targets.forEach(el => {
+      if (reducedMotion) {
+        el.textContent = el.dataset.glitchText || el.textContent
+        el.dataset.glitched = 'done'
+        return
+      }
+      // small stagger so multiple glitch elements on the same page don't
+      // resolve in perfect unison
+      const delay = Math.random() * 150
+      setTimeout(() => runGlitch(el), delay)
+    })
+  }
+
+  initGlitchLoad()
+  document.addEventListener('astro:after-swap', initGlitchLoad)
+</script>
+
+<style is:global>
+  .glitch-load.is-glitching {
+    text-shadow:
+      1px 0 #ff3b6b,
+      -1px 0 #3bdfff;
+  }
+</style>

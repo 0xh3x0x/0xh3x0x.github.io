@@ -6,17 +6,111 @@ interface Props {
 }
 
 const { tags } = Astro.props
+
+// One-line definitions for attack techniques / protocols / tools.
+// Tags not in this map (programming languages, meta tags, etc.) render
+// with no tooltip — just a plain link, same as before.
+const GLOSSARY: Record<string, string> = {
+  'AS-REP Roasting': 'Requesting authentication data for accounts without Kerberos pre-auth, then cracking it offline to recover the password.',
+  'Active Directory': "Microsoft's directory service for managing users, computers, and permissions across a Windows domain.",
+  'BloodHound': 'A tool that maps Active Directory trust relationships as a graph to reveal hidden attack paths to Domain Admin.',
+  'Brute Force': 'Systematically trying many credential combinations until one succeeds.',
+  'Buffer Overflow': 'Writing more data into a buffer than it can hold, corrupting adjacent memory to hijack program execution.',
+  'CVE': 'A publicly catalogued, known vulnerability with a unique identifier (Common Vulnerabilities and Exposures).',
+  'Cronjob': 'A scheduled task on Linux — often abused for privilege escalation when it runs as root with a writable script.',
+  'DCSync': 'Abusing domain replication permissions to ask a Domain Controller for password hashes as if you were another DC.',
+  'DNS': 'The Domain Name System — translates hostnames to IPs; often leaks subdomains and internal naming during recon.',
+  'Docker': 'A containerization platform — misconfigured sockets or escapes can lead to host compromise.',
+  'FTP': 'File Transfer Protocol — frequently misconfigured with anonymous access, exposing sensitive files.',
+  'File Upload': 'A vulnerability where unrestricted file uploads let an attacker plant a web shell or malicious script.',
+  'GPO': 'Group Policy Object — a Windows domain-wide configuration mechanism, abusable for code execution across all machines.',
+  'Kerberoasting': "Requesting service tickets for accounts with an SPN, then cracking them offline to recover the service account's password.",
+  'LDAP': 'Lightweight Directory Access Protocol — used to query Active Directory; often vulnerable to injection or anonymous binds.',
+  'LFI': 'Local File Inclusion — a web vulnerability letting an attacker read arbitrary files on the server.',
+  'Linux Capabilities': 'Granular Linux permissions; misassigned capabilities (e.g. cap_setuid) can lead to privilege escalation.',
+  'NFS': 'Network File System — shared Linux file storage, sometimes exported with no_root_squash for privilege escalation.',
+  'NTLM': "Windows' legacy authentication protocol — vulnerable to relay and pass-the-hash attacks.",
+  'Nmap': 'A network scanner used to enumerate open ports, services, and versions on a target.',
+  'Pass-the-Hash': 'Authenticating using a stolen NTLM password hash directly, without ever knowing the plaintext password.',
+  'Pass-the-Ticket': 'Reusing a stolen Kerberos ticket to authenticate as another user without their password.',
+  'Password Cracking': 'Recovering a plaintext password from a captured hash via brute-force or wordlist attacks.',
+  'Password Spraying': 'Trying one common password against many usernames to avoid account lockouts.',
+  'Path Traversal': "Using '../' sequences to escape a web app's intended directory and read arbitrary files.",
+  'RCE': 'Remote Code Execution — the ability to run arbitrary commands on a target system remotely.',
+  'RDP': 'Remote Desktop Protocol — Windows remote GUI access, sometimes exposed with weak credentials.',
+  'RFI': 'Remote File Inclusion — a web vulnerability allowing an attacker to include and execute a remote file.',
+  'Reverse Engineering': 'Analyzing compiled binaries or obfuscated code to understand or exploit their behavior.',
+  'SMB': 'Server Message Block — Windows file-sharing protocol, frequently abused for enumeration and lateral movement.',
+  'SNMP': 'Simple Network Management Protocol — can leak device info via weak or default community strings.',
+  'SQLi': 'SQL Injection — manipulating database queries via unsanitized input to read or alter data.',
+  'SSH': 'Secure Shell — encrypted remote login, targeted via key theft, brute force, or misconfigured access.',
+  'SSRF': 'Server-Side Request Forgery — tricking a server into making requests to unintended internal destinations.',
+  'SUID': 'A Linux permission bit that runs a binary as its owner — misconfigured SUID binaries are a classic privesc vector.',
+  'Sudo': 'Linux command for running as another user — misconfigured sudo rules are a common privilege escalation path.',
+  'Telnet': 'An unencrypted remote login protocol — credentials and traffic are sent in cleartext.',
+  'VNC': 'Virtual Network Computing — remote GUI access, sometimes deployed with no or weak authentication.',
+  'Wildcard Injection': "Abusing shell wildcard expansion (e.g. tar's '--checkpoint-action') to smuggle arguments into a privileged command.",
+  'WinRM': 'Windows Remote Management — used for remote PowerShell access, often the lateral-movement endpoint on AD boxes.',
+}
 ---
 
 <div class="flex flex-wrap gap-3 text-sm">
   {
-    tags.map((tag) => (
-      <a
-        href={tag.url}
-        class="py-1 px-3 bg-accent/1 hover:bg-accent/8 border-1 border-accent/20 text-accent/90 rounded-2xl transition-colors"
-      >
-        {tag.title}
-      </a>
-    ))
+    tags.map((tag) => {
+      const definition = GLOSSARY[tag.title]
+      return definition ? (
+        <span class="glossary-tag relative inline-block">
+          <a
+            href={tag.url}
+            class="py-1 px-3 bg-accent/1 hover:bg-accent/8 border-1 border-accent/20 text-accent/90 rounded-2xl transition-colors inline-flex items-center gap-1"
+          >
+            {tag.title}
+            <span class="text-accent/40 text-xs">ⓘ</span>
+          </a>
+          <span class="glossary-tooltip" role="tooltip">{definition}</span>
+        </span>
+      ) : (
+        <a
+          href={tag.url}
+          class="py-1 px-3 bg-accent/1 hover:bg-accent/8 border-1 border-accent/20 text-accent/90 rounded-2xl transition-colors"
+        >
+          {tag.title}
+        </a>
+      )
+    })
   }
 </div>
+
+<style>
+  .glossary-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 40;
+    width: max-content;
+    max-width: 260px;
+    background: var(--theme-background);
+    border: 1px solid color-mix(in srgb, var(--theme-accent), 30%, transparent);
+    color: color-mix(in srgb, var(--theme-foreground), 15%, transparent);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .glossary-tag:hover .glossary-tooltip,
+  .glossary-tag:focus-within .glossary-tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  @media (max-width: 640px) {
+    .glossary-tooltip {
+      left: auto;
+      right: 0;
+    }
+  }
+</style>

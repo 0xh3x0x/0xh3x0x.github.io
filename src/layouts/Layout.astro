@@ -1,9 +1,12 @@
 ---
 import '~/styles/global.css'
 import ReadingProgress from '~/components/ReadingProgress.astro'
+import ParticleBackground from '~/components/ParticleBackground.astro'
 import CustomCursor from '~/components/CustomCursor.astro'
 import EasterEgg from '~/components/EasterEgg.astro'
 import CommandPalette from '~/components/CommandPalette.astro'
+import HeadingScramble from '~/components/HeadingScramble.astro'
+import CopyToast from '~/components/CopyToast.astro'
 import Header from '~/components/Header.astro'
 import Footer from '~/components/Footer.astro'
 import LightDarkAutoThemeLoader from '~/components/LightDarkAutoThemeLoader.astro'
@@ -159,11 +162,14 @@ let generatedCss: string = cssLines.join('\n')
     {themeMode === 'select' && <SelectThemeLoader />}
   </head>
   <body class="w-full h-full m-0 bg-background text-foreground">
+    <ParticleBackground />
     <CustomCursor />
     <EasterEgg />
     <CommandPalette />
+    <HeadingScramble />
+    <CopyToast />
     <div
-      class="flex flex-col max-w-3xl min-h-screen border-accent/10 m-auto p-3 sm:py-5 sm:px-6 md:py-10"
+      class="relative z-10 flex flex-col max-w-3xl min-h-screen border-accent/10 m-auto p-3 sm:py-5 sm:px-6 md:py-10"
     >
       <ReadingProgress />
       <Header />

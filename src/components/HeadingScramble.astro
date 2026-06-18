@@ -1,0 +1,77 @@
+---
+// Decrypt/scramble animation for h1 and h2 headings: when a heading scrolls
+// into view, its characters briefly cycle through random glyphs before
+// resolving to the real text. The real text is always present in the DOM
+// (via aria-label + a visually-scrambled span), so screen readers and SEO
+// crawlers are unaffected — only the visual rendering scrambles.
+---
+<script>
+  const GLYPHS = '!<>-_\\/[]{}—=+*^?#0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  function scrambleElement(el: HTMLElement) {
+    if (el.dataset.scrambled === 'done') return
+    const original = el.textContent || ''
+    if (!original.trim()) return
+
+    el.dataset.scrambled = 'running'
+    el.setAttribute('aria-label', original)
+
+    const chars = original.split('')
+    const duration = 500 // ms
+    const startTime = performance.now()
+
+    function frame(now: number) {
+      const elapsed = now - startTime
+      const progress = Math.min(1, elapsed / duration)
+      // reveal characters left-to-right as progress increases
+      const revealCount = Math.floor(progress * chars.length)
+
+      let out = ''
+      for (let i = 0; i < chars.length; i++) {
+        if (chars[i] === ' ') { out += ' '; continue }
+        if (i < revealCount) {
+          out += chars[i]
+        } else {
+          out += GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+        }
+      }
+      el.textContent = out
+
+      if (progress < 1) {
+        requestAnimationFrame(frame)
+      } else {
+        el.textContent = original
+        el.dataset.scrambled = 'done'
+      }
+    }
+    requestAnimationFrame(frame)
+  }
+
+  function initScramble() {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const headings = document.querySelectorAll<HTMLElement>('h1:not([data-no-scramble]), h2:not([data-no-scramble])')
+    if (headings.length === 0) return
+
+    if (reducedMotion) {
+      // mark as done so nothing scrambles, text stays exactly as authored
+      headings.forEach(h => { h.dataset.scrambled = 'done' })
+      return
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          scrambleElement(entry.target as HTMLElement)
+          observer.unobserve(entry.target)
+        }
+      }
+    }, { threshold: 0.4 })
+
+    headings.forEach(h => {
+      if (h.dataset.scrambled !== 'done') observer.observe(h)
+    })
+  }
+
+  initScramble()
+  document.addEventListener('astro:after-swap', initScramble)
+</script>
