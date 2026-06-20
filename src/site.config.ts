@@ -41,6 +41,10 @@ const config: SiteConfig = {
       url: '/posts',
     },
     {
+      name: 'Cheatsheet',
+      url: '/cheatsheet',
+    },
+    {
       name: 'Stats',
       url: '/stats',
     },
