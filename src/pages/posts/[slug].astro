@@ -13,6 +13,7 @@ import siteConfig from '~/site.config'
 import Tags from '~/components/Tags.astro'
 import PostInfo from '~/components/PostInfo.astro'
 import ScrollUpButton from '~/components/ScrollUpButton.astro'
+import ChallengeMode from '~/components/ChallengeMode.astro'
 import type { Collation } from '~/types'
 import ChevronsRight from '~/icons/chevrons-right.svg'
 import { getPostSequenceContext } from '~/utils'
@@ -57,7 +58,28 @@ if (postData.series) {
   const sequenceContext = getPostSequenceContext(post, series.entries)
   nextPostInSeries = sequenceContext.next
 }
-const showSeries = series && series.entries.length > 1
+
+// Build a ranked list of related posts — max 4, excluding the current post.
+// Scoring: shared tags count most, same series/difficulty counts too.
+const currentTags = new Set(postData.tags || [])
+const currentId = post.id
+
+const relatedPosts = sortedPosts
+  .filter(p => p.id !== currentId)
+  .map(p => {
+    let score = 0
+    const pTags = p.data.tags || []
+    for (const t of pTags) {
+      if (currentTags.has(t) && !['HTB', 'Windows', 'Linux'].includes(t)) score += 2
+    }
+    if (p.data.series && p.data.series === postData.series) score += 1
+    if (p.data.difficulty && p.data.difficulty === postData.difficulty) score += 1
+    return { post: p, score }
+  })
+  .filter(({ score }) => score > 0)
+  .sort((a, b) => b.score - a.score)
+  .slice(0, 4)
+  .map(({ post }) => post)
 
 let tags: Collation<'posts'>[] | undefined
 if (postData.tags && postData.tags.length > 0) {
@@ -103,6 +125,7 @@ if (postData.tags && postData.tags.length > 0) {
     <div class="flex flex-col xl:gap-1 2xl:gap-18 xl:flex-row xl:items-start">
       {postData.toc && headings.length > 0 && <TableOfContents headings={headings} />}
       <div class="mb-5 xl:min-w-full 2xl:min-w-full prose">
+        <ChallengeMode post={post} />
         <PostContent />
       </div>
     </div>
@@ -126,12 +149,14 @@ if (postData.tags && postData.tags.length > 0) {
     )
   }
   {
-    showSeries && series ? (
+    relatedPosts.length > 0 ? (
       <section>
-        <DividerText text={`${series.title} Series`} />
-        {series.entries.map((seriesPost) => (
-          <PostPreview post={seriesPost} />
-        ))}
+        <DividerText text="Related Writeups" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          {relatedPosts.map((relPost) => (
+            <PostPreview post={relPost} />
+          ))}
+        </div>
       </section>
     ) : prev || next ? (
       <section>

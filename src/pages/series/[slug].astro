@@ -3,7 +3,7 @@ import type { GetStaticPaths } from 'astro'
 import Layout from '~/layouts/Layout.astro'
 import { SeriesGroup } from '~/utils'
 import PageHeader from '~/components/PageHeader.astro'
-import PostPreview from '~/components/PostPreview.astro'
+import ArchiveCard from '~/components/ArchiveCard.astro'
 
 export const getStaticPaths = (async () => {
   const seriesGroup = await SeriesGroup.build()
@@ -16,6 +16,12 @@ export const getStaticPaths = (async () => {
 }) satisfies GetStaticPaths
 
 const { posts, seriesTitle } = Astro.props
+
+// Show most recent first, full list but in a compact grid
+const sorted = [...posts].reverse()
+const PREVIEW_COUNT = 4
+const preview = sorted.slice(0, PREVIEW_COUNT)
+const remaining = sorted.slice(PREVIEW_COUNT)
 ---
 
 <Layout
@@ -24,6 +30,42 @@ const { posts, seriesTitle } = Astro.props
 >
   <div class="mt-2 sm:mt-0">
     <PageHeader titlePieces={['series', seriesTitle]} />
-    {posts.map((post) => <PostPreview post={post} />)}
+
+    <p class="mt-3 text-sm text-foreground/45 font-mono">
+      // {posts.length} posts in this series
+    </p>
+
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+      {preview.map(post => <ArchiveCard post={post} />)}
+    </div>
+
+    {remaining.length > 0 && (
+      <>
+        <div id="series-all" class="hidden mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {remaining.map(post => <ArchiveCard post={post} />)}
+        </div>
+        <button
+          id="series-show-all"
+          class="mt-4 w-full text-sm font-mono text-foreground/45 hover:text-accent border-1 border-accent/10 hover:border-accent/30 rounded-lg py-2.5 transition-all"
+        >
+          show all {remaining.length} more →
+        </button>
+      </>
+    )}
   </div>
 </Layout>
+
+<script>
+  function initSeries() {
+    const btn = document.getElementById('series-show-all')
+    const rest = document.getElementById('series-all')
+    if (!btn || !rest) return
+    btn.addEventListener('click', () => {
+      rest.classList.remove('hidden')
+      rest.classList.add('grid')
+      btn.remove()
+    })
+  }
+  initSeries()
+  document.addEventListener('astro:after-swap', initSeries)
+</script>

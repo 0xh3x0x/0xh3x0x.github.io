@@ -34,8 +34,7 @@ const psCount = portswiggerPosts.length
 const blogCount = blogPosts.length
 
 // Difficulty distribution for HTB
-const difficulties = ['Easy','Medium','Hard','Insane']
-const diffCounts = Object.fromEntries(difficulties.map(d => [d, htbPosts.filter(p => (p.data.tags||[]).includes(d)).length]))
+
 ---
 
 <Layout title="Archive" description="All writeups and posts — HTB machines, PortSwigger labs, and blog articles">
@@ -83,20 +82,6 @@ const diffCounts = Object.fromEntries(difficulties.map(d => [d, htbPosts.filter(
 
       {/* ── HTB Panel ── */}
       <div id="panel-htb" role="tabpanel" class="tab-panel hidden">
-        {/* Difficulty breakdown */}
-        <div class="flex flex-wrap gap-3 mb-6">
-          {[
-            { d: 'Easy', color: 'text-green-400 border-green-400/30 bg-green-400/6' },
-            { d: 'Medium', color: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/6' },
-            { d: 'Hard', color: 'text-red-400 border-red-400/30 bg-red-400/6' },
-            { d: 'Insane', color: 'text-purple-400 border-purple-400/30 bg-purple-400/6' },
-          ].map(({ d, color }) => (
-            <span class:list={['inline-flex items-center gap-1.5 text-sm font-mono px-3 py-1.5 rounded-lg border-1', color]}>
-              <span class="font-bold">{diffCounts[d]}</span>
-              <span class="opacity-70">{d}</span>
-            </span>
-          ))}
-        </div>
 
         {/* Search */}
         <div class="relative mb-5">

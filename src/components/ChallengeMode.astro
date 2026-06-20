@@ -1,0 +1,165 @@
+---
+// Challenge Mode — hides everything from the first ## Enumeration heading
+// onward in a writeup, letting the reader attempt the box before revealing
+// the solution. Auto-detects the boundary via heading text — no markdown
+// edits needed. Only rendered on HTB series posts.
+import type { CollectionEntry } from 'astro:content'
+
+interface Props {
+  post: CollectionEntry<'posts'>
+}
+const { post } = Astro.props
+const isHTB = (post.data.series || '').includes('Hack-The-Box') || (post.data.tags || []).includes('HTB')
+---
+
+{isHTB && (
+  <div id="challenge-mode-bar" class="not-prose mb-6 rounded-xl border-1 border-accent/20 bg-accent/4 overflow-hidden transition-all">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <span class="text-accent text-lg shrink-0">⚔</span>
+        <div>
+          <div class="font-mono font-semibold text-sm text-heading1">Challenge Mode</div>
+          <div class="text-xs text-foreground/50 font-mono" id="challenge-mode-status">
+            Hide the solution and attempt the box yourself first
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          id="challenge-hint-btn"
+          class="text-xs font-mono px-3 py-1.5 rounded-lg border-1 border-accent/20 text-foreground/50 hover:text-accent hover:border-accent/40 transition-all hidden"
+        >
+          💡 hint
+        </button>
+        <button
+          id="challenge-toggle-btn"
+          class="text-xs font-mono px-4 py-1.5 rounded-lg border-1 border-accent/30 text-accent bg-accent/8 hover:bg-accent/15 transition-all"
+        >
+          Enable
+        </button>
+      </div>
+    </div>
+
+    <div id="challenge-hint-panel" class="hidden border-t-1 border-accent/10 px-4 py-3">
+      <p class="text-xs font-mono text-accent/60 mb-1">// hint</p>
+      <p id="challenge-hint-text" class="text-sm text-foreground/70 leading-relaxed"></p>
+    </div>
+
+    <div id="challenge-overlay" class="hidden border-t-1 border-accent/10">
+      <div class="flex flex-col items-center justify-center gap-3 py-14 bg-gradient-to-b from-transparent to-accent/3">
+        <span class="text-4xl font-mono text-accent/25">🔒</span>
+        <p class="text-sm font-mono text-foreground/40">Solution locked — challenge mode is on</p>
+        <button
+          id="challenge-reveal-btn"
+          class="text-xs font-mono px-4 py-2 rounded-lg border-1 border-accent/30 text-accent bg-accent/8 hover:bg-accent/15 transition-all mt-1"
+        >
+          I give up — reveal solution
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+<script>
+  const SOLUTION_MARKERS = ['enumeration', 'exploitation', 'foothold', 'initial access', 'initial foothold']
+  const STORAGE_PREFIX = 'challenge-mode:'
+
+  function initChallengeMode() {
+    const bar = document.getElementById('challenge-mode-bar')
+    const toggleBtn = document.getElementById('challenge-toggle-btn')
+    const revealBtn = document.getElementById('challenge-reveal-btn')
+    const hintBtn = document.getElementById('challenge-hint-btn')
+    const hintPanel = document.getElementById('challenge-hint-panel')
+    const hintText = document.getElementById('challenge-hint-text')
+    const statusEl = document.getElementById('challenge-mode-status')
+    const overlay = document.getElementById('challenge-overlay')
+    if (!bar || !toggleBtn) return
+
+    const prose = document.querySelector<HTMLElement>('.prose')
+    if (!prose) return
+
+    // find first heading that marks the start of solution content
+    const headings = Array.from(prose.querySelectorAll('h2, h3'))
+    let solutionStart: Element | null = null
+    for (const h of headings) {
+      const text = h.textContent?.toLowerCase().trim() || ''
+      if (SOLUTION_MARKERS.some(m => text.startsWith(m))) {
+        solutionStart = h
+        break
+      }
+    }
+
+    if (!solutionStart) {
+      bar.style.display = 'none'
+      return
+    }
+
+    // everything from that heading onward is "solution" content
+    const allChildren = Array.from(prose.children)
+    const startIdx = allChildren.indexOf(solutionStart as HTMLElement)
+    const solutionEls = startIdx >= 0 ? allChildren.slice(startIdx) : []
+
+    if (solutionEls.length === 0) {
+      bar.style.display = 'none'
+      return
+    }
+
+    // build hint from the first h3 text after the solution starts
+    let hintStr = ''
+    for (const el of solutionEls) {
+      const h3 = el.tagName === 'H3'
+        ? el
+        : el.querySelector?.('h3')
+      if (h3?.textContent?.trim()) {
+        hintStr = `First angle: "${h3.textContent.trim()}"`
+        break
+      }
+    }
+
+    const storageKey = STORAGE_PREFIX + location.pathname
+    let active = localStorage.getItem(storageKey) === 'on'
+
+    function apply() {
+      if (active) {
+        solutionEls.forEach(el => { (el as HTMLElement).style.display = 'none' })
+        overlay!.classList.remove('hidden')
+        toggleBtn!.textContent = 'Disable'
+        toggleBtn!.classList.add('active-challenge')
+        statusEl!.textContent = 'Solution hidden — good luck out there'
+        if (hintStr) hintBtn!.classList.remove('hidden')
+        else hintBtn!.classList.add('hidden')
+        localStorage.setItem(storageKey, 'on')
+      } else {
+        solutionEls.forEach(el => { (el as HTMLElement).style.display = '' })
+        overlay!.classList.add('hidden')
+        hintPanel!.classList.add('hidden')
+        toggleBtn!.textContent = 'Enable'
+        toggleBtn!.classList.remove('active-challenge')
+        statusEl!.textContent = 'Solution visible — challenge mode off'
+        hintBtn!.classList.add('hidden')
+        localStorage.setItem(storageKey, 'off')
+      }
+    }
+
+    toggleBtn.addEventListener('click', () => { active = !active; apply() })
+    revealBtn?.addEventListener('click', () => { active = false; apply() })
+    hintBtn?.addEventListener('click', () => {
+      if (hintText) hintText.textContent = hintStr
+      hintPanel?.classList.toggle('hidden')
+    })
+
+    apply()
+  }
+
+  initChallengeMode()
+  document.addEventListener('astro:after-swap', initChallengeMode)
+</script>
+
+<style is:global>
+  #challenge-toggle-btn.active-challenge {
+    background: color-mix(in srgb, var(--theme-accent), 18%, transparent);
+    border-color: var(--theme-accent);
+    color: var(--theme-accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--theme-accent), 20%, transparent);
+  }
+</style>
