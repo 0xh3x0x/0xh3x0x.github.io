@@ -1,135 +1,256 @@
 ---
-// Custom cursor: a small dot that snaps to the pointer + a trailing ring that
-// eases toward it smoothly. Desktop pointer devices only — falls back to the
-// native cursor on touch devices and when reduced motion is requested.
+// Custom cursor: dot + trailing ring + comet-tail particle trail.
+// Desktop / fine-pointer only. Respects prefers-reduced-motion.
 ---
-<div id="cursor-dot" aria-hidden="true"></div>
+<canvas id="cursor-trail-canvas" aria-hidden="true"></canvas>
+<div id="cursor-dot"  aria-hidden="true"></div>
 <div id="cursor-ring" aria-hidden="true"></div>
 
 <style>
+  #cursor-trail-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    pointer-events: none;
+    z-index: 9996;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  html.has-custom-cursor #cursor-trail-canvas { opacity: 1; }
+
   #cursor-dot,
   #cursor-ring {
     position: fixed;
-    top: 0;
-    left: 0;
+    top: 0; left: 0;
     pointer-events: none;
-    z-index: 9998;
     border-radius: 50%;
     opacity: 0;
+    z-index: 9998;
   }
-
   #cursor-dot {
-    width: 8px;
-    height: 8px;
+    width: 8px; height: 8px;
     margin: -4px 0 0 -4px;
     background: var(--theme-accent);
     box-shadow: 0 0 10px var(--theme-accent), 0 0 2px var(--theme-accent);
     transition: opacity 0.2s ease;
   }
-
   #cursor-ring {
-    width: 36px;
-    height: 36px;
+    width: 36px; height: 36px;
     margin: -18px 0 0 -18px;
     border: 2px solid var(--theme-accent);
     box-shadow: 0 0 12px color-mix(in srgb, var(--theme-accent), 35%, transparent);
-    transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, margin 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, margin 0.2s ease, background-color 0.2s ease;
   }
-
   #cursor-ring.cursor-hover {
-    width: 56px;
-    height: 56px;
+    width: 56px; height: 56px;
     margin: -28px 0 0 -28px;
     background: color-mix(in srgb, var(--theme-accent), 12%, transparent);
   }
-
   #cursor-ring.cursor-active {
-    width: 26px;
-    height: 26px;
+    width: 26px; height: 26px;
     margin: -13px 0 0 -13px;
   }
 
   html.has-custom-cursor #cursor-dot,
-  html.has-custom-cursor #cursor-ring {
-    opacity: 1;
-  }
+  html.has-custom-cursor #cursor-ring { opacity: 1; }
+
   html.has-custom-cursor,
-  html.has-custom-cursor a,
-  html.has-custom-cursor button,
-  html.has-custom-cursor input,
-  html.has-custom-cursor textarea,
-  html.has-custom-cursor * {
-    cursor: none !important;
-  }
+  html.has-custom-cursor * { cursor: none !important; }
 </style>
 
 <script>
   function initCursor() {
-    const dot = document.getElementById('cursor-dot')
-    const ring = document.getElementById('cursor-ring')
-    if (!dot || !ring) return
+    const canvas = document.getElementById('cursor-trail-canvas') as HTMLCanvasElement | null
+    const dot    = document.getElementById('cursor-dot')
+    const ring   = document.getElementById('cursor-ring')
+    if (!dot || !ring || !canvas) return
 
-    const supportsFinePointer = window.matchMedia('(pointer: fine)').matches
+    const finePointer  = window.matchMedia('(pointer: fine)').matches
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!supportsFinePointer || reducedMotion) {
+
+    if (!finePointer || reducedMotion) {
       document.documentElement.classList.remove('has-custom-cursor')
       dot.style.display = 'none'
       ring.style.display = 'none'
+      canvas.style.display = 'none'
       return
     }
     document.documentElement.classList.add('has-custom-cursor')
 
-    let mouseX = window.innerWidth / 2
-    let mouseY = window.innerHeight / 2
-    let ringX = mouseX
-    let ringY = mouseY
+    // ── canvas setup ─────────────────────────────────────────────────────
+    const ctx = canvas.getContext('2d')!
+    let dpr = Math.min(window.devicePixelRatio || 1, 2)
+    let W = window.innerWidth
+    let H = window.innerHeight
+
+    function resizeCanvas() {
+      W = window.innerWidth
+      H = window.innerHeight
+      dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas!.width  = W * dpr
+      canvas!.height = H * dpr
+      canvas!.style.width  = W + 'px'
+      canvas!.style.height = H + 'px'
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+    resizeCanvas()
+    window.addEventListener('resize', resizeCanvas)
+
+    // ── accent colour probe (same technique as particle background) ───────
+    let accentR = 100, accentG = 220, accentB = 120
+    function sampleAccent() {
+      const probe = document.createElement('canvas')
+      probe.width = 1; probe.height = 1
+      const pc = probe.getContext('2d')!
+      pc.fillStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue('--theme-accent').trim() || '#4ade80'
+      pc.fillRect(0, 0, 1, 1)
+      const [r, g, b] = pc.getImageData(0, 0, 1, 1).data
+      accentR = r; accentG = g; accentB = b
+    }
+    sampleAccent()
+    const themeObs = new MutationObserver(sampleAccent)
+    themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['style','class','data-theme'] })
+
+    // ── particle pool ─────────────────────────────────────────────────────
+    const TRAIL_LENGTH = 18          // max simultaneous trail particles
+    const PARTICLE_LIFE = 520        // ms each particle lives
+    const SPAWN_DIST = 4             // min px mouse must move to spawn a new particle
+
+    type Particle = {
+      x: number; y: number
+      vx: number; vy: number
+      r: number                      // radius
+      born: number                   // timestamp
+      life: number                   // total lifetime ms
+    }
+    const particles: Particle[] = []
+    let lastSpawnX = 0
+    let lastSpawnY = 0
+
+    function spawnParticle(x: number, y: number) {
+      const angle = Math.random() * Math.PI * 2
+      const speed = Math.random() * 0.6 + 0.1
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.3, // slight upward drift
+        r:  Math.random() * 2.5 + 1,
+        born: performance.now(),
+        life: PARTICLE_LIFE * (0.6 + Math.random() * 0.4),
+      })
+      // keep pool bounded
+      if (particles.length > TRAIL_LENGTH) particles.shift()
+    }
+
+    // ── cursor state ──────────────────────────────────────────────────────
+    let mouseX = W / 2
+    let mouseY = H / 2
+    let ringX  = mouseX
+    let ringY  = mouseY
     let rafId: number
+    let running = true
 
     function onMove(e: MouseEvent) {
       mouseX = e.clientX
       mouseY = e.clientY
-      // dot snaps instantly — use left/top, not transform, so the CSS
-      // transition list (which targets width/height/margin) never fights it
+
+      // snap dot
       dot!.style.left = mouseX + 'px'
-      dot!.style.top = mouseY + 'px'
+      dot!.style.top  = mouseY + 'px'
+
+      // spawn trail particle only if moved enough (avoids dense blob when hovering still)
+      const dx = mouseX - lastSpawnX
+      const dy = mouseY - lastSpawnY
+      if (dx * dx + dy * dy > SPAWN_DIST * SPAWN_DIST) {
+        spawnParticle(mouseX, mouseY)
+        lastSpawnX = mouseX
+        lastSpawnY = mouseY
+      }
     }
     window.addEventListener('mousemove', onMove, { passive: true })
 
-    // smooth trailing animation for the ring — eased toward the live mouse position
-    function tick() {
+    // ── animation loop ────────────────────────────────────────────────────
+    function tick(now: number) {
+      if (!running) return
+
+      // ring easing
       ringX += (mouseX - ringX) * 0.15
       ringY += (mouseY - ringY) * 0.15
       ring!.style.left = ringX + 'px'
-      ring!.style.top = ringY + 'px'
+      ring!.style.top  = ringY + 'px'
+
+      // draw trail
+      ctx.clearRect(0, 0, W, H)
+      const dead: number[] = []
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]
+        const age = now - p.born
+        if (age >= p.life) { dead.push(i); continue }
+
+        const progress = age / p.life           // 0 → 1
+        const alpha    = (1 - progress) * 0.75  // fades out
+        const radius   = p.r * (1 - progress * 0.4) // shrinks slightly
+
+        // move
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += 0.015 // gentle gravity
+
+        // draw glow + core
+        const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.5)
+        grd.addColorStop(0,   `rgba(${accentR},${accentG},${accentB},${alpha})`)
+        grd.addColorStop(0.5, `rgba(${accentR},${accentG},${accentB},${alpha * 0.4})`)
+        grd.addColorStop(1,   `rgba(${accentR},${accentG},${accentB},0)`)
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, radius * 2.5, 0, Math.PI * 2)
+        ctx.fillStyle = grd
+        ctx.fill()
+
+        // solid core
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${accentR},${accentG},${accentB},${alpha})`
+        ctx.fill()
+      }
+
+      // remove dead particles in reverse order
+      for (let i = dead.length - 1; i >= 0; i--) particles.splice(dead[i], 1)
+
       rafId = requestAnimationFrame(tick)
     }
     rafId = requestAnimationFrame(tick)
 
-    // grow the ring on interactive elements
-    const interactiveSelector = 'a, button, input, textarea, select, [role="button"], .tab-btn, .diff-btn, .os-btn, .stat-tab-btn'
-    document.addEventListener('mouseover', (e) => {
-      const target = (e.target as HTMLElement)?.closest(interactiveSelector)
-      if (target) ring!.classList.add('cursor-hover')
+    // ── interactive states ────────────────────────────────────────────────
+    const interactiveSel = 'a, button, input, textarea, select, [role="button"], .tab-btn, .diff-btn, .os-btn, .stat-tab-btn'
+    document.addEventListener('mouseover', e => {
+      if ((e.target as HTMLElement)?.closest(interactiveSel)) ring!.classList.add('cursor-hover')
     })
-    document.addEventListener('mouseout', (e) => {
-      const target = (e.target as HTMLElement)?.closest(interactiveSelector)
-      if (target) ring!.classList.remove('cursor-hover')
+    document.addEventListener('mouseout', e => {
+      if ((e.target as HTMLElement)?.closest(interactiveSel)) ring!.classList.remove('cursor-hover')
     })
-
     document.addEventListener('mousedown', () => ring!.classList.add('cursor-active'))
-    document.addEventListener('mouseup', () => ring!.classList.remove('cursor-active'))
+    document.addEventListener('mouseup',   () => ring!.classList.remove('cursor-active'))
 
     document.addEventListener('mouseleave', () => {
-      dot!.style.opacity = '0'
-      ring!.style.opacity = '0'
+      dot!.style.opacity    = '0'
+      ring!.style.opacity   = '0'
+      canvas!.style.opacity = '0'
     })
     document.addEventListener('mouseenter', () => {
-      dot!.style.opacity = ''
-      ring!.style.opacity = ''
+      dot!.style.opacity    = ''
+      ring!.style.opacity   = ''
+      canvas!.style.opacity = ''
     })
 
-    // clean up on view-transition swaps so we don't stack multiple rAF loops
-    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(rafId), { once: true })
+    // ── cleanup on view-transition ────────────────────────────────────────
+    document.addEventListener('astro:before-swap', () => {
+      running = false
+      cancelAnimationFrame(rafId)
+      themeObs.disconnect()
+      window.removeEventListener('resize', resizeCanvas)
+    }, { once: true })
   }
 
   initCursor()
