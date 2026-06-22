@@ -5,6 +5,7 @@ draft: false
 description: 'Windows Easy machine - TheFrizz.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'Active Directory', 'BloodHound', 'LDAP', 'SMB', 'GPO', 'Sudo', 'RCE', 'PHP', 'LFI', 'SSH', 'DNS', 'Nmap', 'Password Spraying', 'CVE', 'MySQL']
+cveIds: ['CVE-2023-34598', 'CVE-2023-45878']
 difficulty: 'Easy'
 osType: 'Windows'
 ---

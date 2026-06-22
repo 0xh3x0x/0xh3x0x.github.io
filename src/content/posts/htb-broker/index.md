@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Broker.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Sudo', 'RCE', 'SSH', 'Nmap', 'CVE']
+cveIds: ['CVE-2023-46604']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

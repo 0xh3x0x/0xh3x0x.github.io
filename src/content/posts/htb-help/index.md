@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Help.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'SUID', 'Sudo', 'RCE', 'File Upload', 'PHP', 'SSH', 'Nmap', 'CVE']
+cveIds: ['CVE-2017-16995']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

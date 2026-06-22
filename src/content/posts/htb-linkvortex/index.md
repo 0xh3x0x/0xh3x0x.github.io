@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Windows machine - LinkVortex.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'Linux', 'Sudo', 'Docker', 'SSH', 'DNS', 'CVE', 'Git']
+cveIds: ['CVE-2023-40028']
 difficulty: 'Unknown'
 osType: 'Linux'
 ---

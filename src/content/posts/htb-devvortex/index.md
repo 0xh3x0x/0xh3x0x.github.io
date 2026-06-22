@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - **Devvortex**.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Active Directory', 'Sudo', 'RCE', 'PHP', 'SSH', 'DNS', 'CVE', 'MySQL']
+cveIds: ['CVE-2023-1326']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

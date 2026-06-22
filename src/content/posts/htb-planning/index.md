@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Planning.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Active Directory', 'Cronjob', 'RCE', 'SSH', 'CVE']
+cveIds: ['CVE-2024-9264']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

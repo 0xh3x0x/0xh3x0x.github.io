@@ -1,5 +1,6 @@
 ---
 import Layout from '~/layouts/Layout.astro'
+import PageHeader from '~/components/PageHeader.astro'
 
 // ── Data ──────────────────────────────────────────────────────────────────
 // Organized by pentest phase, not by tool. Each command has:
@@ -828,8 +829,8 @@ const colorMap: Record<string, { bg: string; text: string; border: string; badge
   <div class="mt-4 mb-8">
     <div class="flex flex-col sm:flex-row sm:items-end gap-4 justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-heading1 tracking-tight">Pentest Cheatsheet</h1>
-        <p class="mt-1.5 text-foreground/55 text-sm max-w-xl">
+         <PageHeader title="Pentest Cheatsheet" />
+        <p class="mt-3 text-sm text-foreground/45 font-mono">
           {totalCount} commands organized by attack phase — from initial recon through post-exploitation.
           Seeded from real HTB writeups.
         </p>

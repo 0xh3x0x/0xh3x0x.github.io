@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Silentium.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Docker', 'RCE', 'SSH', 'DNS', 'Nmap', 'Brute Force', 'CVE']
+cveIds: ['CVE-2025-8110']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

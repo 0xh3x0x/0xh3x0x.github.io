@@ -5,6 +5,7 @@ draft: false
 description: 'Windows Easy machine - Titanic.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'Linux', 'Cronjob', 'Docker', 'SQLi', 'RCE', 'LFI', 'SSH', 'DNS', 'Brute Force', 'Password Cracking', 'CVE', 'MySQL']
+cveIds: ['CVE-2024-41817']
 difficulty: 'Easy'
 osType: 'Windows'
 ---

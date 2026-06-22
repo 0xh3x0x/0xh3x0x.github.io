@@ -5,6 +5,7 @@ draft: false
 description: 'Windows Easy machine - Netmon.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'SMB', 'RCE', 'FTP', 'Nmap', 'CVE']
+cveIds: ['CVE-2018-9276']
 difficulty: 'Easy'
 osType: 'Windows'
 ---

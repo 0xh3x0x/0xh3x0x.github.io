@@ -5,6 +5,7 @@ draft: false
 description: 'Windows Hard machine - Haze.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'Active Directory', 'BloodHound', 'WinRM', 'LDAP', 'SMB', 'NTLM', 'Sudo', 'PHP', 'LFI', 'DNS', 'Nmap', 'CVE']
+cveIds: ['CVE-2024-36991']
 difficulty: 'Hard'
 osType: 'Windows'
 ---

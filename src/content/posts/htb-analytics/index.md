@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Analytics.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Sudo', 'Docker', 'RCE', 'SSH', 'DNS', 'Nmap', 'CVE']
+cveIds: ['CVE-2023-2640', 'CVE-2023-32629']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

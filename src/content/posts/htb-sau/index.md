@@ -5,6 +5,7 @@ draft: false
 description: 'Linux Easy machine - Sau.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Linux', 'Sudo', 'SSRF', 'RCE', 'SSH', 'Nmap', 'CVE']
+cveIds: ['CVE-2023-27163']
 difficulty: 'Easy'
 osType: 'Linux'
 ---

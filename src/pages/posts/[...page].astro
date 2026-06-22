@@ -5,73 +5,102 @@ import { getSortedPosts } from '~/utils'
 import PageHeader from '~/components/PageHeader.astro'
 import ArchiveCard from '~/components/ArchiveCard.astro'
 import PostPreview from '~/components/PostPreview.astro'
-import Pagination from '~/components/Pagination.astro'
 import siteConfig from '~/site.config'
 
-// We use a broad catch-all route but handle category filtering in the page logic.
-// For simplicity with static generation, we render all posts and use client-side tabs.
 export const getStaticPaths = (async ({ paginate }) => {
   const sortedPosts = await getSortedPosts()
-  return paginate(sortedPosts.reverse(), { pageSize: 9999 }) // all posts, tabs done client-side
+  return paginate(sortedPosts.reverse(), { pageSize: 9999 })
 }) satisfies GetStaticPaths
 
 const { page } = Astro.props
 const allPosts = page.data
 
-// Categorise
-const htbPosts = allPosts.filter(p => (p.data.series || '').toLowerCase().includes('Hack-The-Box') || (p.data.tags || []).includes('HTB'))
-const portswiggerPosts = allPosts.filter(p => (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger'))
+const htbPosts = allPosts.filter(p =>
+  (p.data.series || '').toLowerCase().includes('hack') || (p.data.tags || []).includes('HTB'))
+const portswiggerPosts = allPosts.filter(p =>
+  (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger'))
 const blogPosts = allPosts.filter(p => {
   const isHTB = (p.data.series || '').toLowerCase().includes('hack') || (p.data.tags || []).includes('HTB')
-  const isPS = (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger')
+  const isPS  = (p.data.tags || []).includes('PortSwigger') || (p.data.series || '').toLowerCase().includes('portswigger')
   return !isHTB && !isPS
 })
 
-// Stats
 const totalCount = allPosts.length
-const htbCount = htbPosts.length
-const psCount = portswiggerPosts.length
-const blogCount = blogPosts.length
+const htbCount   = htbPosts.length
+const psCount    = portswiggerPosts.length
+const blogCount  = blogPosts.length
 
-// Difficulty distribution for HTB
+const difficulties = ['Easy','Medium','Hard','Insane']
+const diffCounts   = Object.fromEntries(
+  difficulties.map(d => [d, htbPosts.filter(p => p.data.difficulty === d).length])
+)
 
+// OS split
+const winCount   = htbPosts.filter(p => p.data.osType === 'Windows').length
+const linuxCount = htbPosts.filter(p => p.data.osType === 'Linux').length
+
+// CVE posts — posts that mention CVE IDs in their tags or body
+// We derive this from the tags containing 'CVE' and cross-reference slugs
+// Since CVEs are in post body not frontmatter, we identify via the CVE tag + known slugs
+const cvePosts = allPosts.filter(p => (p.data.tags || []).includes('CVE'))
+const cveCount = cvePosts.length
+
+// greetings keyed by time-of-day — rendered server-side as a data array,
+// selected client-side so the visitor's local time is used (not server time)
+const greetings = [
+  { range: [0,  5],  msg: '// burning the midnight oil — respect the grind',       icon: '🌙' },
+  { range: [5,  9],  msg: '// early bird gets the shell — morning recon session',   icon: '🌅' },
+  { range: [9,  12], msg: '// good morning — what are we rooting today',            icon: '☕' },
+  { range: [12, 14], msg: '// lunch break hacking — quick, efficient, dangerous',   icon: '⚡' },
+  { range: [14, 17], msg: '// afternoon session — enumerate everything',            icon: '🔍' },
+  { range: [17, 20], msg: '// evening grind — the best writeups happen after dark', icon: '🖥️' },
+  { range: [20, 24], msg: '// late night hacking hours — no distractions',          icon: '🔥' },
+]
 ---
 
-<Layout title="Archive" description="All writeups and posts — HTB machines, PortSwigger labs, and blog articles">
+<Layout title="Archive" description="All writeups — HTB machines, PortSwigger labs, blog articles">
   <div class="mt-2 sm:mt-0 w-full">
     <PageHeader title="archive" />
 
-    {/* ── Stats bar ── */}
-    <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+    {/* ── Time-based greeting ── */}
+    <div id="archive-greeting" class="mt-3 flex items-center gap-2 text-sm font-mono text-foreground/40">
+      <span id="greeting-icon" class="text-base"></span>
+      <span id="greeting-msg"></span>
+    </div>
+
+    {/* ── Stats ── */}
+    <div class="mt-6 grid grid-cols-2 sm:grid-cols-5 gap-3">
       {[
-        { label: 'Total Posts', value: totalCount, icon: '◈' },
-        { label: 'HTB Writeups', value: htbCount, icon: '⬡' },
-        { label: 'PortSwigger', value: psCount, icon: '⬢' },
-        { label: 'Blog Posts', value: blogCount, icon: '◆' },
-      ].map(stat => (
-        <div class="flex flex-col items-center justify-center gap-1 py-4 px-3 rounded-xl border-1 border-accent/15 bg-accent/4 text-center">
-          <span class="text-accent text-xl font-mono">{stat.icon}</span>
-          <span class="text-2xl font-bold text-heading1 font-mono">{stat.value}</span>
-          <span class="text-xs text-foreground/55 uppercase tracking-widest">{stat.label}</span>
-        </div>
+        { label: 'Total Posts',  value: totalCount, icon: '◈', tab: 'all' },
+        { label: 'HTB Machines', value: htbCount,   icon: '⬡', tab: 'htb' },
+        { label: 'PortSwigger',  value: psCount,    icon: '⬢', tab: 'portswigger' },
+        { label: 'Blog Posts',   value: blogCount,  icon: '◆', tab: 'blog' },
+        { label: 'CVEs Covered', value: cveCount,   icon: '⚠', tab: 'cve' },
+      ].map(s => (
+        <button
+          data-stat-tab={s.tab}
+          class="stat-tab-btn flex flex-col items-center justify-center gap-1 py-4 px-3 rounded-xl border-1 border-accent/12 bg-accent/4 hover:bg-accent/8 hover:border-accent/30 transition-all text-center cursor-pointer"
+        >
+          <span class="text-accent text-xl font-mono">{s.icon}</span>
+          <span class="text-2xl font-bold text-heading1 font-mono">{s.value}</span>
+          <span class="text-xs text-foreground/55 uppercase tracking-widest">{s.label}</span>
+        </button>
       ))}
     </div>
 
     {/* ── Tabs ── */}
     <div class="mt-8" id="archive-root">
-      <div class="flex flex-wrap gap-2 mb-6 border-b-1 border-accent/15 pb-3" id="tab-bar" role="tablist">
+      <div class="flex flex-wrap gap-2 mb-6 border-b-1 border-accent/15 pb-3" role="tablist">
         {[
-          { id: 'htb', label: 'HTB', count: htbCount, icon: '⬡' },
-          { id: 'portswigger', label: 'PortSwigger', count: psCount, icon: '⬢' },
-          { id: 'blog', label: 'Blog', count: blogCount, icon: '◆' },
-          { id: 'all', label: 'All Posts', count: totalCount, icon: '◈' },
+          { id: 'htb',         label: 'HTB',        count: htbCount,   icon: '⬡' },
+          { id: 'portswigger', label: 'PortSwigger', count: psCount,    icon: '⬢' },
+          { id: 'blog',        label: 'Blog',        count: blogCount,  icon: '◆' },
+          { id: 'cve',         label: 'CVEs',        count: cveCount,   icon: '⚠' },
+          { id: 'all',         label: 'All Posts',   count: totalCount, icon: '◈' },
         ].map(tab => (
           <button
             class="tab-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-mono font-semibold border-1 transition-all duration-200 cursor-pointer"
-            data-tab={tab.id}
-            role="tab"
-            aria-selected="false"
-            aria-controls={`panel-${tab.id}`}
+            data-tab={tab.id} role="tab" aria-selected="false" aria-controls={`panel-${tab.id}`}
           >
             <span class="text-accent">{tab.icon}</span>
             {tab.label}
@@ -83,41 +112,73 @@ const blogCount = blogPosts.length
       {/* ── HTB Panel ── */}
       <div id="panel-htb" role="tabpanel" class="tab-panel hidden">
 
+        {/* Difficulty filter pills */}
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+          <span class="text-xs font-mono text-foreground/35 mr-1">filter:</span>
+          <button data-diff="all" class="diff-btn active-diff text-xs font-mono px-3 py-1.5 rounded-lg border-1 border-accent/25 text-accent bg-accent/10 transition-all cursor-pointer">
+            All <span class="opacity-60">({htbCount})</span>
+          </button>
+          <button data-diff="Easy" class="diff-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 transition-all cursor-pointer text-green-400 border-green-400/25 bg-green-400/6 hover:bg-green-400/15">
+            Easy <span class="opacity-60">({diffCounts['Easy']})</span>
+          </button>
+          <button data-diff="Medium" class="diff-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 transition-all cursor-pointer text-yellow-400 border-yellow-400/25 bg-yellow-400/6 hover:bg-yellow-400/15">
+            Medium <span class="opacity-60">({diffCounts['Medium']})</span>
+          </button>
+          <button data-diff="Hard" class="diff-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 transition-all cursor-pointer text-red-400 border-red-400/25 bg-red-400/6 hover:bg-red-400/15">
+            Hard <span class="opacity-60">({diffCounts['Hard']})</span>
+          </button>
+          <button data-diff="Insane" class="diff-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 transition-all cursor-pointer text-purple-400 border-purple-400/25 bg-purple-400/6 hover:bg-purple-400/15">
+            Insane <span class="opacity-60">({diffCounts['Insane']})</span>
+          </button>
+        </div>
+
+        {/* OS filter */}
+        <div class="flex flex-wrap items-center gap-2 mb-5">
+          <span class="text-xs font-mono text-foreground/35 mr-1">os:</span>
+          <button data-os="all"     class="os-btn active-os text-xs font-mono px-3 py-1.5 rounded-lg border-1 border-accent/25 text-accent bg-accent/10 transition-all cursor-pointer">All</button>
+          <button data-os="Windows" class="os-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 border-blue-400/25 text-blue-400 bg-blue-400/6 hover:bg-blue-400/15 transition-all cursor-pointer">
+            Windows <span class="opacity-60">({winCount})</span>
+          </button>
+          <button data-os="Linux"   class="os-btn text-xs font-mono px-3 py-1.5 rounded-lg border-1 border-orange-400/25 text-orange-400 bg-orange-400/6 hover:bg-orange-400/15 transition-all cursor-pointer">
+            Linux <span class="opacity-60">({linuxCount})</span>
+          </button>
+        </div>
+
         {/* Search */}
         <div class="relative mb-5">
           <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
-          <input
-            type="text"
-            placeholder="grep machine..."
-            class="htb-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
-            autocomplete="off"
-          />
+          <input type="text" placeholder="grep machine..." autocomplete="off"
+            class="htb-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors" />
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 htb-grid">
-          {htbPosts.map(post => <ArchiveCard post={post} />)}
+          {htbPosts.map(post => (
+            <div
+              class="htb-card"
+              data-difficulty={post.data.difficulty || ''}
+              data-os={post.data.osType || ''}
+            >
+              <ArchiveCard post={post} />
+            </div>
+          ))}
         </div>
-        {htbPosts.length === 0 && (
-          <p class="text-foreground/40 font-mono text-center py-12">// no HTB writeups found</p>
-        )}
+
+        <p class="htb-empty hidden text-foreground/40 font-mono text-center py-12">// no machines match filter</p>
+        {htbPosts.length === 0 && <p class="text-foreground/40 font-mono text-center py-12">// no HTB writeups found</p>}
       </div>
 
       {/* ── PortSwigger Panel ── */}
       <div id="panel-portswigger" role="tabpanel" class="tab-panel hidden">
         <div class="relative mb-5">
           <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
-          <input
-            type="text"
-            placeholder="grep lab..."
-            class="ps-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
-            autocomplete="off"
-          />
+          <input type="text" placeholder="grep lab..." autocomplete="off"
+            class="ps-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors" />
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 ps-grid">
           {portswiggerPosts.map(post => <ArchiveCard post={post} />)}
         </div>
         {portswiggerPosts.length === 0 && (
-          <p class="text-foreground/40 font-mono text-center py-12">// no PortSwigger labs yet — add <code>PortSwigger</code> tag to your posts</p>
+          <p class="text-foreground/40 font-mono text-center py-12">// no PortSwigger labs yet — add <code>PortSwigger</code> tag</p>
         )}
       </div>
 
@@ -125,22 +186,95 @@ const blogCount = blogPosts.length
       <div id="panel-blog" role="tabpanel" class="tab-panel hidden">
         <div class="flex flex-col gap-4">
           {blogPosts.map(post => <PostPreview post={post} />)}
-          {blogPosts.length === 0 && (
-            <p class="text-foreground/40 font-mono text-center py-12">// no blog posts found</p>
-          )}
+          {blogPosts.length === 0 && <p class="text-foreground/40 font-mono text-center py-12">// no blog posts found</p>}
         </div>
+      </div>
+
+      {/* ── CVE Panel ── */}
+      <div id="panel-cve" role="tabpanel" class="tab-panel hidden">
+        <div class="mb-5">
+          <p class="text-sm text-foreground/50 leading-relaxed max-w-2xl">
+            Real CVEs covered across {cveCount} writeups — each one exploited hands-on, not just documented.
+          </p>
+        </div>
+
+        {/* CVE cards */}
+        <div class="space-y-3">
+          {cvePosts.map(post => {
+            const diff = post.data.difficulty || 'Unknown'
+            const os = post.data.osType || 'Unknown'
+            const diffClass = diff === 'Easy' ? 'text-green-400 border-green-400/25 bg-green-400/6'
+              : diff === 'Medium' ? 'text-yellow-400 border-yellow-400/25 bg-yellow-400/6'
+              : diff === 'Hard' ? 'text-red-400 border-red-400/25 bg-red-400/6'
+              : diff === 'Insane' ? 'text-purple-400 border-purple-400/25 bg-purple-400/6'
+              : 'text-foreground/40 border-foreground/15 bg-foreground/4'
+            const osClass = os === 'Windows'
+              ? 'text-blue-400 border-blue-400/25 bg-blue-400/6'
+              : 'text-orange-400 border-orange-400/25 bg-orange-400/6'
+
+            return (
+              <a
+                href={`/posts/${post.id.replace('/index','').split('/')[0]}`}
+                class="group flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border-1 border-accent/10 bg-accent/2 hover:border-accent/25 hover:bg-accent/5 transition-all"
+              >
+                {/* CVE badge */}
+                <div class="shrink-0">
+                  <span class="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1.5 rounded-lg border-1 border-red-400/30 bg-red-400/8 text-red-400">
+                    ⚠ CVE
+                  </span>
+                </div>
+
+                {/* Content */}
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-heading1 group-hover:text-accent transition-colors mb-1.5">
+                    {post.data.title}
+                  </div>
+                  {/* CVE IDs from frontmatter */}
+                  <div class="flex flex-wrap gap-1.5">
+                    {(post.data.cveIds || []).map(cve => (
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-xs font-mono px-2 py-0.5 rounded-full border-1 border-red-400/25 bg-red-400/6 text-red-400/90 hover:bg-red-400/15 transition-colors"
+                        onclick="event.stopPropagation()"
+                      >
+                        {cve}
+                      </a>
+                    ))}
+                    {(post.data.tags || []).filter(t => !t.startsWith('CVE') && !['HTB','Windows','Linux','Easy','Medium','Hard','Insane'].includes(t)).slice(0,3).map(tag => (
+                      <span class="text-xs font-mono px-2 py-0.5 rounded-full border-1 border-accent/15 bg-accent/3 text-accent/60">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Badges */}
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class={`text-xs font-mono px-2.5 py-1 rounded-full border-1 ${diffClass}`}>
+                    {diff}
+                  </span>
+                  <span class={`text-xs font-mono px-2.5 py-1 rounded-full border-1 ${osClass}`}>
+                    {os}
+                  </span>
+                </div>
+              </a>
+            )
+          })}
+        </div>
+
+        {cvePosts.length === 0 && (
+          <p class="text-foreground/40 font-mono text-center py-12">// add 'CVE' tag to posts covering real CVEs</p>
+        )}
       </div>
 
       {/* ── All Panel ── */}
       <div id="panel-all" role="tabpanel" class="tab-panel hidden">
         <div class="relative mb-5">
           <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/50 font-mono text-sm pointer-events-none">$</span>
-          <input
-            type="text"
-            placeholder="grep post..."
-            class="all-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors"
-            autocomplete="off"
-          />
+          <input type="text" placeholder="grep post..." autocomplete="off"
+            class="all-search w-full pl-8 pr-4 py-2.5 rounded-lg bg-accent/4 border-1 border-accent/15 focus:border-accent/40 focus:outline-none text-sm font-mono text-foreground placeholder:text-foreground/30 transition-colors" />
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 all-grid">
           {allPosts.map(post => <ArchiveCard post={post} />)}
@@ -166,59 +300,136 @@ const blogCount = blogPosts.length
     color: var(--theme-accent);
     background-color: color-mix(in srgb, var(--theme-accent), 10%, transparent);
   }
-  .tab-panel {
-    animation: fadeIn 0.18s ease;
-  }
+  .tab-panel { animation: fadeIn 0.18s ease; }
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  .diff-btn.active-diff, .os-btn.active-os {
+    outline: 2px solid color-mix(in srgb, var(--theme-accent), 40%, transparent);
+    outline-offset: 1px;
   }
 </style>
 
 <script>
   function initArchive() {
-    const tabs = document.querySelectorAll<HTMLButtonElement>('.tab-btn')
+    const tabs   = document.querySelectorAll<HTMLButtonElement>('.tab-btn')
     const panels = document.querySelectorAll<HTMLElement>('.tab-panel')
+
+    // ── stat cards jump to tab ──
+    document.querySelectorAll<HTMLButtonElement>('.stat-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => activate(btn.dataset.statTab!))
+    })
 
     function activate(id: string) {
       tabs.forEach(t => {
         t.classList.toggle('active', t.dataset.tab === id)
         t.setAttribute('aria-selected', String(t.dataset.tab === id))
       })
-      panels.forEach(p => {
-        p.classList.toggle('hidden', p.id !== `panel-${id}`)
-      })
+      panels.forEach(p => p.classList.toggle('hidden', p.id !== `panel-${id}`))
       sessionStorage.setItem('archive-tab', id)
+      // reset HTB filters when switching away and back
+      if (id === 'htb') applyHTBFilters()
     }
 
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => activate(tab.dataset.tab!))
-    })
+    tabs.forEach(tab => tab.addEventListener('click', () => activate(tab.dataset.tab!)))
 
-    // Restore last tab or default to htb
-    const saved = sessionStorage.getItem('archive-tab') || 'htb'
+    // ── restore tab from hash or session ──
+    const hash = location.hash.replace('#','')
+    const validTabs = ['htb','portswigger','blog','cve','all']
+    // pick up pending diff filter from homepage pill clicks
+    const pendingDiff = sessionStorage.getItem('archive-diff-filter')
+    if (pendingDiff) {
+      sessionStorage.removeItem('archive-diff-filter')
+      activeDiff = pendingDiff
+    }
+
+    // visually mark the active diff btn if pre-selected
+    if (activeDiff !== 'all') {
+      document.querySelectorAll<HTMLButtonElement>('.diff-btn').forEach(b => {
+        b.classList.toggle('active-diff', b.dataset.diff === activeDiff)
+      })
+    }
+
+    const saved = (validTabs.includes(hash) ? hash : null)
+               || sessionStorage.getItem('archive-tab')
+               || 'htb'
     activate(saved)
 
-    // Live search helpers
-    function addSearch(inputSel: string, gridSel: string) {
-      const input = document.querySelector<HTMLInputElement>(inputSel)
+    // ── HTB difficulty + OS filter ──
+    let activeDiff = 'all'
+    let activeOS   = 'all'
+
+    function applyHTBFilters() {
+      const cards = document.querySelectorAll<HTMLElement>('.htb-card')
+      const search = (document.querySelector<HTMLInputElement>('.htb-search')?.value || '').toLowerCase()
+      let visible = 0
+      cards.forEach(card => {
+        const diff   = card.dataset.difficulty || ''
+        const os     = card.dataset.os || ''
+        const text   = card.textContent?.toLowerCase() || ''
+        const diffOk = activeDiff === 'all' || diff === activeDiff
+        const osOk   = activeOS   === 'all' || os   === activeOS
+        const searchOk = !search || text.includes(search)
+        const show = diffOk && osOk && searchOk
+        card.style.display = show ? '' : 'none'
+        if (show) visible++
+      })
+      const empty = document.querySelector<HTMLElement>('.htb-empty')
+      if (empty) empty.classList.toggle('hidden', visible > 0)
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeDiff = btn.dataset.diff!
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active-diff'))
+        btn.classList.add('active-diff')
+        applyHTBFilters()
+      })
+    })
+
+    document.querySelectorAll<HTMLButtonElement>('.os-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeOS = btn.dataset.os!
+        document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active-os'))
+        btn.classList.add('active-os')
+        applyHTBFilters()
+      })
+    })
+
+    // ── search ──
+    function addSearch(sel: string, gridSel: string, useHTBFilter = false) {
+      const input = document.querySelector<HTMLInputElement>(sel)
       const grid  = document.querySelector<HTMLElement>(gridSel)
-      if (!input || !grid) return
+      if (!input) return
       input.addEventListener('input', () => {
+        if (useHTBFilter) { applyHTBFilters(); return }
         const q = input.value.toLowerCase().trim()
-        grid.querySelectorAll<HTMLAnchorElement>('a').forEach(card => {
-          const text = card.textContent?.toLowerCase() || ''
-          card.style.display = (!q || text.includes(q)) ? '' : 'none'
+        grid?.querySelectorAll<HTMLElement>('a').forEach(card => {
+          card.style.display = (!q || (card.textContent||'').toLowerCase().includes(q)) ? '' : 'none'
         })
       })
     }
 
-    addSearch('.htb-search',  '.htb-grid')
+    addSearch('.htb-search',  '.htb-grid', true)
     addSearch('.ps-search',   '.ps-grid')
     addSearch('.all-search',  '.all-grid')
   }
 
-  // Run on first load and after view transitions
   initArchive()
   document.addEventListener('astro:after-swap', initArchive)
+</script>
+
+<script define:vars={{ greetings }}>
+  function setGreeting() {
+    const hour = new Date().getHours()
+    const match = greetings.find(g => hour >= g.range[0] && hour < g.range[1])
+    if (!match) return
+    const icon = document.getElementById('greeting-icon')
+    const msg  = document.getElementById('greeting-msg')
+    if (icon) icon.textContent = match.icon
+    if (msg)  msg.textContent  = match.msg
+  }
+  setGreeting()
+  document.addEventListener('astro:after-swap', setGreeting)
 </script>

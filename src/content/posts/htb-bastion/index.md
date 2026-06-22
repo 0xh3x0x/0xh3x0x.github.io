@@ -5,6 +5,7 @@ draft: false
 description: 'Windows Easy machine - Bastion.'
 series: 'Hack-The-Box'
 tags: ['HTB', 'Windows', 'WinRM', 'SMB', 'NTLM', 'Sudo', 'PHP', 'SSH', 'Nmap', 'Password Cracking', 'CVE']
+cveIds: ['CVE-2023-30367']
 difficulty: 'Easy'
 osType: 'Windows'
 ---
